@@ -37,7 +37,10 @@ impl Simulation {
     }
 
     fn simulate_particles(&mut self, dt: f64) {
-        // TODO
+        for particle in &mut self.particles {
+            particle.pos[0] += particle.velocity[0] * dt;
+            particle.pos[1] += particle.velocity[1] * dt;
+        }
     }
 
     fn particle_to_grid_velocity(&mut self) {
@@ -80,7 +83,7 @@ fn main() {
     let mut simulation = Simulation::new([100, 100]);
     simulation.particles.push(Particle {
         pos: [100.0, 100.0],
-        velocity: [10.0, 10.0],
+        velocity: [100.0, 100.0],
     });
 
     window.set_lazy(false);
@@ -93,7 +96,7 @@ fn main() {
             simulation.simulate(dt.as_secs_f64());
             graphics_buffer.clear_color([1.0, 1.0, 1.0, 1.0]);
             simulation.render(ctx, graphics_buffer);
+            prev_frame = SystemTime::now();
         });
-        prev_frame = SystemTime::now();
     }
 }
