@@ -1,0 +1,8 @@
+[package]
+name = "fluid-sim-v2-pic"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+piston = "1.0.0"
+piston_window = "0.132.0"
