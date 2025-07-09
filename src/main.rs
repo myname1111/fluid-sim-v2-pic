@@ -9,6 +9,7 @@ use piston_window::{ellipse::circle, *};
 const BASE_PARTICLE_RADIUS: f64 = 10.0;
 const CELL_SIZE: f64 = BASE_PARTICLE_RADIUS * 2.0;
 const PARTICLE_COLOR: [f32; 4] = [0.0, 0.0, 1.0, 1.0];
+const GRAVITY: f64 = 100.0;
 
 struct Particle {
     pos: [f64; 2],
@@ -24,6 +25,8 @@ impl Particle {
     fn simulate(&mut self, dt: f64, size: [f64; 2]) {
         self.pos[0] += self.velocity[0] * dt;
         self.pos[1] += self.velocity[1] * dt;
+
+        self.velocity[1] += GRAVITY * dt;
 
         self.push_out_of_border(size);
     }
