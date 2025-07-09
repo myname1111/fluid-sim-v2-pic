@@ -1,4 +1,7 @@
-use std::{collections::HashMap, time::SystemTime};
+use std::{
+    collections::{HashMap, HashSet},
+    time::SystemTime,
+};
 
 use piston::WindowSettings;
 use piston_window::{ellipse::circle, *};
@@ -12,17 +15,51 @@ struct Particle {
     velocity: [f64; 2],
 }
 
-#[derive(Default)]
-struct Grid {
-    inner: HashMap<[u32; 2], f32>,
+#[derive(Default, Debug)]
+struct Grid<T> {
+    grid: HashMap<[u32; 2], T>,
+}
+
+#[derive(Default, Debug)]
+struct ParticleGrid {
+    grid: Grid<HashSet<usize>>,
+}
+
+impl ParticleGrid {
+    fn move_particle(&mut self, old: [u32; 2], new: [u32; 2], particle_idx: usize) {
+        let mut remove_old = false;
+
+        if let Some(old_cell) = self.grid.grid.get_mut(&old) {
+            old_cell.remove(&particle_idx);
+            remove_old = old_cell.is_empty();
+        }
+
+        if remove_old {
+            self.grid.grid.remove(&old);
+        }
+
+        if let Some(new_cell) = self.grid.grid.get_mut(&new) {
+            new_cell.insert(particle_idx);
+        } else {
+            let mut new_set = HashSet::new();
+            new_set.insert(particle_idx);
+            self.grid.grid.insert(new, new_set);
+        }
+    }
 }
 
 struct Simulation {
     particles: Vec<Particle>,
-    x_velocity: Grid,
-    y_velocity: Grid,
-    pressure: Grid,
+    x_velocity: Grid<f32>,
+    y_velocity: Grid<f32>,
+    particle_grid: ParticleGrid,
     size: [u32; 2],
+}
+
+enum GridType {
+    XVelocity,
+    YVelocity,
+    ParticleGrid,
 }
 
 impl Simulation {
@@ -31,15 +68,44 @@ impl Simulation {
             particles: vec![],
             x_velocity: Grid::default(),
             y_velocity: Grid::default(),
-            pressure: Grid::default(),
+            particle_grid: ParticleGrid::default(),
             size,
         }
     }
 
+    fn particle_pos_to_grid_pos(particle_pos: [f64; 2], grid_type: GridType) -> [u32; 2] {
+        let offset = match grid_type {
+            GridType::XVelocity => [0.0, -0.5],
+            GridType::YVelocity => [-0.5, 0.0],
+            GridType::ParticleGrid => [0.0, 0.0],
+        };
+
+        let offsetted_particle_pos = [
+            particle_pos[0] + offset[0] * CELL_SIZE,
+            particle_pos[1] + offset[1] * CELL_SIZE,
+        ];
+
+        [
+            (offsetted_particle_pos[0] / CELL_SIZE).floor() as u32,
+            (offsetted_particle_pos[1] / CELL_SIZE).floor() as u32,
+        ]
+    }
+
     fn simulate_particles(&mut self, dt: f64) {
-        for particle in &mut self.particles {
+        for (idx, particle) in self.particles.iter_mut().enumerate() {
+            let old_grid_pos = Self::particle_pos_to_grid_pos(particle.pos, GridType::ParticleGrid);
+
             particle.pos[0] += particle.velocity[0] * dt;
             particle.pos[1] += particle.velocity[1] * dt;
+
+            let new_grid_pos = Self::particle_pos_to_grid_pos(particle.pos, GridType::ParticleGrid);
+
+            if old_grid_pos == new_grid_pos {
+                continue;
+            }
+
+            self.particle_grid
+                .move_particle(old_grid_pos, new_grid_pos, idx);
         }
     }
 
@@ -97,6 +163,7 @@ fn main() {
             graphics_buffer.clear_color([1.0, 1.0, 1.0, 1.0]);
             simulation.render(ctx, graphics_buffer);
             prev_frame = SystemTime::now();
+            println!("{:#?}", simulation.particle_grid)
         });
     }
 }
