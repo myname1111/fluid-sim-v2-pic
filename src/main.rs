@@ -15,6 +15,20 @@ struct Particle {
     velocity: [f64; 2],
 }
 
+impl Particle {
+    fn push_out_of_border(&mut self, size: [f64; 2]) {
+        self.pos[0] = self.pos[0].clamp(0.0, size[0]);
+        self.pos[1] = self.pos[1].clamp(0.0, size[0]);
+    }
+
+    fn simulate(&mut self, dt: f64, size: [f64; 2]) {
+        self.pos[0] += self.velocity[0] * dt;
+        self.pos[1] += self.velocity[1] * dt;
+
+        self.push_out_of_border(size);
+    }
+}
+
 #[derive(Default, Debug)]
 struct Grid<T> {
     grid: HashMap<[u32; 2], T>,
@@ -95,8 +109,11 @@ impl Simulation {
         for (idx, particle) in self.particles.iter_mut().enumerate() {
             let old_grid_pos = Self::particle_pos_to_grid_pos(particle.pos, GridType::ParticleGrid);
 
-            particle.pos[0] += particle.velocity[0] * dt;
-            particle.pos[1] += particle.velocity[1] * dt;
+            let size = [
+                self.size[0] as f64 * CELL_SIZE,
+                self.size[1] as f64 * CELL_SIZE,
+            ];
+            particle.simulate(dt, size);
 
             let new_grid_pos = Self::particle_pos_to_grid_pos(particle.pos, GridType::ParticleGrid);
 
@@ -146,10 +163,10 @@ fn main() {
         .build()
         .unwrap();
 
-    let mut simulation = Simulation::new([100, 100]);
+    let mut simulation = Simulation::new([10, 10]);
     simulation.particles.push(Particle {
         pos: [100.0, 100.0],
-        velocity: [100.0, 100.0],
+        velocity: [100.0, 10.0],
     });
 
     window.set_lazy(false);
@@ -163,7 +180,6 @@ fn main() {
             graphics_buffer.clear_color([1.0, 1.0, 1.0, 1.0]);
             simulation.render(ctx, graphics_buffer);
             prev_frame = SystemTime::now();
-            println!("{:#?}", simulation.particle_grid)
         });
     }
 }
