@@ -1,13 +1,10 @@
-use std::{
-    collections::HashMap,
-    time::{Duration, SystemTime},
-};
+use std::{collections::HashMap, time::SystemTime};
 
 use piston::WindowSettings;
-use piston_window::{ellipse::circle, *};
+use piston_window::*;
 
 const BASE_PARTICLE_RADIUS: f64 = 10.0;
-const CELL_SIZE: f64 = BASE_PARTICLE_RADIU * 2.0;
+const CELL_SIZE: f64 = BASE_PARTICLE_RADIUS * 2.0;
 
 struct Particle {
     pos: [f64; 2],
