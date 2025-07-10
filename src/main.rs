@@ -167,10 +167,17 @@ fn main() {
         .unwrap();
 
     let mut simulation = Simulation::new([10, 10]);
-    simulation.particles.push(Particle {
-        pos: [100.0, 100.0],
-        velocity: [100.0, 10.0],
-    });
+    for x in 0..10 {
+        for y in 0..10 {
+            simulation.particles.push(Particle {
+                pos: [
+                    100.0 + x as f64 * BASE_PARTICLE_RADIUS,
+                    100.0 + y as f64 * BASE_PARTICLE_RADIUS,
+                ],
+                velocity: [0.0, 0.0],
+            });
+        }
+    }
 
     window.set_lazy(false);
     let mut prev_frame = SystemTime::now();
