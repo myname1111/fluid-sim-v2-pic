@@ -68,10 +68,33 @@ struct Grid<T>(HashMap<[u32; 2], T>);
 struct ParticleGrid(Grid<HashSet<usize>>);
 
 trait GridParticleInterface {
-    fn get_grid_pos(particle_pos: [f64; 2]) -> [u32; 2];
+    const OFFSET: [f64; 2];
+
+    fn get_grid_pos(particle_pos: [f64; 2]) -> [u32; 2] {
+        return [
+            (particle_pos[0] / CELL_SIZE + Self::OFFSET[0]).floor() as u32,
+            (particle_pos[1] / CELL_SIZE + Self::OFFSET[1]).floor() as u32,
+        ];
+    }
     fn remove_grid_pos(&mut self, grid_pos: [u32; 2]);
     fn remove(&mut self, pos: [f64; 2]) {
         self.remove_grid_pos(Self::get_grid_pos(pos))
+    }
+    fn get_weights(pos: [f64; 2]) -> [f64; 4] {
+        let pos = [
+            pos[0] / CELL_SIZE + Self::OFFSET[0],
+            pos[1] / CELL_SIZE + Self::OFFSET[1],
+        ];
+
+        let grid_pos = pos.map(f64::floor);
+        let offset = [pos[0] - grid_pos[0], pos[1] - grid_pos[1]];
+
+        [
+            offset[0] * offset[1],
+            (1.0 - offset[0]) * offset[1],
+            offset[0] * (1.0 - offset[1]),
+            (1.0 - offset[0]) * (1.0 - offset[1]),
+        ]
     }
 }
 
@@ -114,12 +137,7 @@ impl ParticleGrid {
 }
 
 impl GridParticleInterface for ParticleGrid {
-    fn get_grid_pos(particle_pos: [f64; 2]) -> [u32; 2] {
-        [
-            (particle_pos[0] / CELL_SIZE).floor() as u32,
-            (particle_pos[1] / CELL_SIZE).floor() as u32,
-        ]
-    }
+    const OFFSET: [f64; 2] = [0.0, 0.0];
 
     fn remove_grid_pos(&mut self, grid_pos: [u32; 2]) {
         self.0 .0.remove(&grid_pos);
@@ -130,12 +148,7 @@ impl GridParticleInterface for ParticleGrid {
 struct XVelocityGrid(Grid<f32>);
 
 impl GridParticleInterface for XVelocityGrid {
-    fn get_grid_pos(particle_pos: [f64; 2]) -> [u32; 2] {
-        [
-            ((particle_pos[0] - 0.5) / CELL_SIZE).floor() as u32,
-            ((particle_pos[1]) / CELL_SIZE).floor() as u32,
-        ]
-    }
+    const OFFSET: [f64; 2] = [0.0, 0.5];
 
     fn remove_grid_pos(&mut self, grid_pos: [u32; 2]) {
         self.0 .0.remove(&grid_pos);
@@ -146,12 +159,7 @@ impl GridParticleInterface for XVelocityGrid {
 struct YVelocityGrid(Grid<f32>);
 
 impl GridParticleInterface for YVelocityGrid {
-    fn get_grid_pos(particle_pos: [f64; 2]) -> [u32; 2] {
-        [
-            ((particle_pos[0]) / CELL_SIZE).floor() as u32,
-            ((particle_pos[1] - 0.5) / CELL_SIZE).floor() as u32,
-        ]
-    }
+    const OFFSET: [f64; 2] = [0.5, 0.0];
 
     fn remove_grid_pos(&mut self, grid_pos: [u32; 2]) {
         self.0 .0.remove(&grid_pos);
@@ -289,6 +297,9 @@ impl Simulation {
     }
 
     fn particle_to_grid_velocity(&mut self) {
+        self.x_velocity.0 .0.clear();
+        self.y_velocity.0 .0.clear();
+
         for particle in &self.particles {}
     }
 
