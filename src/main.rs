@@ -28,7 +28,7 @@ trait Direction<T> {
 impl Direction<f64> for [f64; 2] {
     fn direction(self, other: Self) -> [f64; 2] {
         let distance = self.distance(other);
-        if distance == 0.0 {
+        if f64::is_subnormal(distance * 65536.0) {
             return [0.0, 0.0];
         }
 
@@ -205,6 +205,11 @@ impl Simulation {
             self.particles[idxs[1]].pos[0] -= shift * direction[0];
             self.particles[idxs[0]].pos[1] += shift * direction[1];
             self.particles[idxs[1]].pos[1] -= shift * direction[1];
+
+            self.particles[idxs[0]].velocity[0] += shift * direction[0] * 4.0;
+            self.particles[idxs[1]].velocity[0] -= shift * direction[0] * 4.0;
+            self.particles[idxs[0]].velocity[1] += shift * direction[1] * 4.0;
+            self.particles[idxs[1]].velocity[1] -= shift * direction[1] * 4.0;
         }
     }
 
