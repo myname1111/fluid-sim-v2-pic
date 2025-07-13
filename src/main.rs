@@ -62,37 +62,47 @@ impl Particle {
 }
 
 #[derive(Default, Debug)]
-struct Grid<T> {
-    grid: HashMap<[u32; 2], T>,
-}
+struct Grid<T>(HashMap<[u32; 2], T>);
 
 #[derive(Default, Debug)]
-struct ParticleGrid {
-    grid: Grid<HashSet<usize>>,
+struct ParticleGrid(Grid<HashSet<usize>>);
+
+trait GridParticleInterface {
+    fn move_particle(&mut self, old: [u32; 2], new: [u32; 2], particle_idx: usize);
+    fn get_grid_pos(particle_pos: [f64; 2]) -> [u32; 2];
 }
 
-impl ParticleGrid {
+impl GridParticleInterface for ParticleGrid {
     fn move_particle(&mut self, old: [u32; 2], new: [u32; 2], particle_idx: usize) {
         let mut remove_old = false;
 
-        if let Some(old_cell) = self.grid.grid.get_mut(&old) {
+        if let Some(old_cell) = self.0 .0.get_mut(&old) {
             old_cell.remove(&particle_idx);
             remove_old = old_cell.is_empty();
         }
 
         if remove_old {
-            self.grid.grid.remove(&old);
+            self.0 .0.remove(&old);
         }
 
-        if let Some(new_cell) = self.grid.grid.get_mut(&new) {
+        if let Some(new_cell) = self.0 .0.get_mut(&new) {
             new_cell.insert(particle_idx);
         } else {
             let mut new_set = HashSet::new();
             new_set.insert(particle_idx);
-            self.grid.grid.insert(new, new_set);
+            self.0 .0.insert(new, new_set);
         }
     }
+
+    fn get_grid_pos(particle_pos: [f64; 2]) -> [u32; 2] {
+        [
+            (particle_pos[0] / CELL_SIZE).floor() as u32,
+            (particle_pos[1] / CELL_SIZE).floor() as u32,
+        ]
+    }
 }
+
+struct XVelocityGrid(Grid<f32>);
 
 struct Simulation {
     particles: Vec<Particle>,
@@ -100,12 +110,6 @@ struct Simulation {
     y_velocity: Grid<f32>,
     particle_grid: ParticleGrid,
     size: [u32; 2],
-}
-
-enum GridType {
-    XVelocity,
-    YVelocity,
-    ParticleGrid,
 }
 
 impl Simulation {
@@ -119,41 +123,23 @@ impl Simulation {
         }
     }
 
-    fn particle_pos_to_grid_pos(particle_pos: [f64; 2], grid_type: GridType) -> [u32; 2] {
-        let offset = match grid_type {
-            GridType::XVelocity => [0.0, -0.5],
-            GridType::YVelocity => [-0.5, 0.0],
-            GridType::ParticleGrid => [0.0, 0.0],
-        };
-
-        let offsetted_particle_pos = [
-            particle_pos[0] + offset[0] * CELL_SIZE,
-            particle_pos[1] + offset[1] * CELL_SIZE,
-        ];
-
-        [
-            (offsetted_particle_pos[0] / CELL_SIZE).floor() as u32,
-            (offsetted_particle_pos[1] / CELL_SIZE).floor() as u32,
-        ]
-    }
-
     fn spawn(&mut self, particle: Particle) {
         self.particles.push(particle);
         let new_index = self.particles.len() - 1;
-        let grid_pos = Self::particle_pos_to_grid_pos(particle.pos, GridType::ParticleGrid);
-        if let Some(hashset) = self.particle_grid.grid.grid.get_mut(&grid_pos) {
+        let grid_pos = ParticleGrid::get_grid_pos(particle.pos);
+        if let Some(hashset) = self.particle_grid.0 .0.get_mut(&grid_pos) {
             hashset.insert(new_index);
         } else {
             let mut new_hashset = HashSet::new();
             new_hashset.insert(new_index);
-            self.particle_grid.grid.grid.insert(grid_pos, new_hashset);
+            self.particle_grid.0 .0.insert(grid_pos, new_hashset);
         }
     }
 
     fn self_collide_particles(&mut self) {
         let mut collisions = HashMap::new();
 
-        for (pos, particles) in &self.particle_grid.grid.grid {
+        for (pos, particles) in &self.particle_grid.0 .0 {
             let other_particles = (-1i32..1i32)
                 .flat_map(|x| (-1i32..1i32).map(move |y| [x, y]))
                 .map(|delta_pos| {
@@ -162,7 +148,7 @@ impl Simulation {
                         (pos[1] as i32 + delta_pos[1]) as u32,
                     ]
                 })
-                .filter_map(|neighbour_pos| self.particle_grid.grid.grid.get(&neighbour_pos))
+                .filter_map(|neighbour_pos| self.particle_grid.0 .0.get(&neighbour_pos))
                 .flat_map(|neighbour| neighbour.iter())
                 .chain(particles.iter());
 
@@ -215,7 +201,7 @@ impl Simulation {
 
     fn simulate_particles(&mut self, dt: f64) {
         for (idx, particle) in self.particles.iter_mut().enumerate() {
-            let old_grid_pos = Self::particle_pos_to_grid_pos(particle.pos, GridType::ParticleGrid);
+            let old_grid_pos = ParticleGrid::get_grid_pos(particle.pos);
 
             let size = [
                 self.size[0] as f64 * CELL_SIZE,
@@ -223,7 +209,7 @@ impl Simulation {
             ];
             particle.simulate(dt, size);
 
-            let new_grid_pos = Self::particle_pos_to_grid_pos(particle.pos, GridType::ParticleGrid);
+            let new_grid_pos = ParticleGrid::get_grid_pos(particle.pos);
 
             if old_grid_pos == new_grid_pos {
                 continue;
@@ -237,7 +223,7 @@ impl Simulation {
     }
 
     fn particle_to_grid_velocity(&mut self) {
-        // TODO
+        for particle in &self.particles {}
     }
 
     fn make_incompressible(&mut self) {
@@ -249,7 +235,7 @@ impl Simulation {
     }
 
     fn simulate(&mut self, dt: f64) {
-        self.simulate_particles(dt);
+        // self.simulate_particles(dt);
         self.particle_to_grid_velocity();
         self.make_incompressible();
         self.grid_to_particle_velocity();
