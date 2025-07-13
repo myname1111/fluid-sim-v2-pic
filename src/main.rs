@@ -68,12 +68,20 @@ struct Grid<T>(HashMap<[u32; 2], T>);
 struct ParticleGrid(Grid<HashSet<usize>>);
 
 trait GridParticleInterface {
-    fn move_particle(&mut self, old: [u32; 2], new: [u32; 2], particle_idx: usize);
     fn get_grid_pos(particle_pos: [f64; 2]) -> [u32; 2];
+    fn remove_grid_pos(&mut self, grid_pos: [u32; 2]);
+    fn remove(&mut self, pos: [f64; 2]) {
+        self.remove_grid_pos(Self::get_grid_pos(pos))
+    }
 }
 
-impl GridParticleInterface for ParticleGrid {
-    fn move_particle(&mut self, old: [u32; 2], new: [u32; 2], particle_idx: usize) {
+impl ParticleGrid {
+    fn move_particle_grid_pos(
+        &mut self,
+        old: [u32; 2],
+        new: [u32; 2],
+        particle_idx: usize,
+    ) -> bool {
         let mut remove_old = false;
 
         if let Some(old_cell) = self.0 .0.get_mut(&old) {
@@ -92,22 +100,67 @@ impl GridParticleInterface for ParticleGrid {
             new_set.insert(particle_idx);
             self.0 .0.insert(new, new_set);
         }
+
+        remove_old
     }
 
+    fn move_particle(&mut self, old: [f64; 2], new: [f64; 2], particle_idx: usize) -> bool {
+        self.move_particle_grid_pos(
+            Self::get_grid_pos(old),
+            Self::get_grid_pos(new),
+            particle_idx,
+        )
+    }
+}
+
+impl GridParticleInterface for ParticleGrid {
     fn get_grid_pos(particle_pos: [f64; 2]) -> [u32; 2] {
         [
             (particle_pos[0] / CELL_SIZE).floor() as u32,
             (particle_pos[1] / CELL_SIZE).floor() as u32,
         ]
     }
+
+    fn remove_grid_pos(&mut self, grid_pos: [u32; 2]) {
+        self.0 .0.remove(&grid_pos);
+    }
 }
 
+#[derive(Default)]
 struct XVelocityGrid(Grid<f32>);
 
+impl GridParticleInterface for XVelocityGrid {
+    fn get_grid_pos(particle_pos: [f64; 2]) -> [u32; 2] {
+        [
+            ((particle_pos[0] - 0.5) / CELL_SIZE).floor() as u32,
+            ((particle_pos[1]) / CELL_SIZE).floor() as u32,
+        ]
+    }
+
+    fn remove_grid_pos(&mut self, grid_pos: [u32; 2]) {
+        self.0 .0.remove(&grid_pos);
+    }
+}
+
+#[derive(Default)]
+struct YVelocityGrid(Grid<f32>);
+
+impl GridParticleInterface for YVelocityGrid {
+    fn get_grid_pos(particle_pos: [f64; 2]) -> [u32; 2] {
+        [
+            ((particle_pos[0]) / CELL_SIZE).floor() as u32,
+            ((particle_pos[1] - 0.5) / CELL_SIZE).floor() as u32,
+        ]
+    }
+
+    fn remove_grid_pos(&mut self, grid_pos: [u32; 2]) {
+        self.0 .0.remove(&grid_pos);
+    }
+}
 struct Simulation {
     particles: Vec<Particle>,
-    x_velocity: Grid<f32>,
-    y_velocity: Grid<f32>,
+    x_velocity: XVelocityGrid,
+    y_velocity: YVelocityGrid,
     particle_grid: ParticleGrid,
     size: [u32; 2],
 }
@@ -116,8 +169,8 @@ impl Simulation {
     fn new(size: [u32; 2]) -> Simulation {
         Simulation {
             particles: vec![],
-            x_velocity: Grid::default(),
-            y_velocity: Grid::default(),
+            x_velocity: XVelocityGrid::default(),
+            y_velocity: YVelocityGrid::default(),
             particle_grid: ParticleGrid::default(),
             size,
         }
@@ -187,10 +240,23 @@ impl Simulation {
 
         for (idxs, (distance, direction)) in collisions {
             let shift = BASE_PARTICLE_RADIUS - distance / 2.0;
+            let old_grid_pos = idxs.map(|idx| ParticleGrid::get_grid_pos(self.particles[idx].pos));
+
             self.particles[idxs[0]].pos[0] += shift * direction[0];
             self.particles[idxs[1]].pos[0] -= shift * direction[0];
             self.particles[idxs[0]].pos[1] += shift * direction[1];
             self.particles[idxs[1]].pos[1] -= shift * direction[1];
+
+            let new_grid_pos = idxs.map(|idx| ParticleGrid::get_grid_pos(self.particles[idx].pos));
+
+            idxs.iter()
+                .zip(old_grid_pos.iter())
+                .zip(new_grid_pos.iter())
+                .filter(|((_, old), new)| old != new)
+                .map(|((idx, old), new)| {
+                    self.particle_grid.move_particle_grid_pos(*old, *new, *idx)
+                })
+                .for_each(drop);
 
             self.particles[idxs[0]].velocity[0] += shift * direction[0] * 4.0;
             self.particles[idxs[1]].velocity[0] -= shift * direction[0] * 4.0;
@@ -216,7 +282,7 @@ impl Simulation {
             }
 
             self.particle_grid
-                .move_particle(old_grid_pos, new_grid_pos, idx);
+                .move_particle_grid_pos(old_grid_pos, new_grid_pos, idx);
         }
 
         self.self_collide_particles();
