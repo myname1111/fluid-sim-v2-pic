@@ -11,6 +11,35 @@ const CELL_SIZE: f64 = BASE_PARTICLE_RADIUS * 2.0;
 const PARTICLE_COLOR: [f32; 4] = [0.0, 0.0, 1.0, 1.0];
 const GRAVITY: f64 = 100.0;
 
+trait Distance<T> {
+    fn distance(self, other: Self) -> T;
+}
+
+impl Distance<f64> for [f64; 2] {
+    fn distance(self, other: Self) -> f64 {
+        f64::sqrt((self[0] - other[0]).powi(2) + (self[1] - other[1]).powi(2))
+    }
+}
+
+trait Direction<T> {
+    fn direction(self, other: Self) -> [T; 2];
+}
+
+impl Direction<f64> for [f64; 2] {
+    fn direction(self, other: Self) -> [f64; 2] {
+        let distance = self.distance(other);
+        if distance == 0.0 {
+            return [0.0, 0.0];
+        }
+
+        [
+            (self[0] - other[0]) / distance,
+            (self[1] - other[1]) / distance,
+        ]
+    }
+}
+
+#[derive(Clone, Copy)]
 struct Particle {
     pos: [f64; 2],
     velocity: [f64; 2],
@@ -108,6 +137,77 @@ impl Simulation {
         ]
     }
 
+    fn spawn(&mut self, particle: Particle) {
+        self.particles.push(particle);
+        let new_index = self.particles.len() - 1;
+        let grid_pos = Self::particle_pos_to_grid_pos(particle.pos, GridType::ParticleGrid);
+        if let Some(hashset) = self.particle_grid.grid.grid.get_mut(&grid_pos) {
+            hashset.insert(new_index);
+        } else {
+            let mut new_hashset = HashSet::new();
+            new_hashset.insert(new_index);
+            self.particle_grid.grid.grid.insert(grid_pos, new_hashset);
+        }
+    }
+
+    fn self_collide_particles(&mut self) {
+        let mut collisions = HashMap::new();
+
+        for (pos, particles) in &self.particle_grid.grid.grid {
+            let other_particles = (-1i32..1i32)
+                .flat_map(|x| (-1i32..1i32).map(move |y| [x, y]))
+                .map(|delta_pos| {
+                    [
+                        (pos[0] as i32 + delta_pos[0]) as u32,
+                        (pos[1] as i32 + delta_pos[1]) as u32,
+                    ]
+                })
+                .filter_map(|neighbour_pos| self.particle_grid.grid.grid.get(&neighbour_pos))
+                .flat_map(|neighbour| neighbour.iter())
+                .chain(particles.iter());
+
+            for particle_idx in particles {
+                for other_particle_idx in other_particles.clone() {
+                    if particle_idx == other_particle_idx {
+                        continue;
+                    };
+
+                    let key = if particle_idx < other_particle_idx {
+                        [*other_particle_idx, *particle_idx]
+                    } else {
+                        [*particle_idx, *other_particle_idx]
+                    };
+
+                    if collisions.contains_key(&key) {
+                        continue;
+                    }
+
+                    let particle = self.particles[*particle_idx];
+                    let other_particle = self.particles[*other_particle_idx];
+
+                    let distance = particle.pos.distance(other_particle.pos);
+                    let direction = if particle_idx < other_particle_idx {
+                        other_particle.pos.direction(particle.pos)
+                    } else {
+                        particle.pos.direction(other_particle.pos)
+                    };
+
+                    if distance < 2.0 * BASE_PARTICLE_RADIUS {
+                        collisions.insert(key, (distance, direction));
+                    }
+                }
+            }
+        }
+
+        for (idxs, (distance, direction)) in collisions {
+            let shift = BASE_PARTICLE_RADIUS - distance / 2.0;
+            self.particles[idxs[0]].pos[0] += shift * direction[0];
+            self.particles[idxs[1]].pos[0] -= shift * direction[0];
+            self.particles[idxs[0]].pos[1] += shift * direction[1];
+            self.particles[idxs[1]].pos[1] -= shift * direction[1];
+        }
+    }
+
     fn simulate_particles(&mut self, dt: f64) {
         for (idx, particle) in self.particles.iter_mut().enumerate() {
             let old_grid_pos = Self::particle_pos_to_grid_pos(particle.pos, GridType::ParticleGrid);
@@ -127,6 +227,8 @@ impl Simulation {
             self.particle_grid
                 .move_particle(old_grid_pos, new_grid_pos, idx);
         }
+
+        self.self_collide_particles();
     }
 
     fn particle_to_grid_velocity(&mut self) {
@@ -169,7 +271,7 @@ fn main() {
     let mut simulation = Simulation::new([10, 10]);
     for x in 0..10 {
         for y in 0..10 {
-            simulation.particles.push(Particle {
+            simulation.spawn(Particle {
                 pos: [
                     100.0 + x as f64 * BASE_PARTICLE_RADIUS,
                     100.0 + y as f64 * BASE_PARTICLE_RADIUS,
