@@ -344,7 +344,51 @@ impl Simulation {
     }
 
     fn make_incompressible(&mut self) {
-        // TODO
+        for pos in self.particle_grid.0 .0.keys() {
+            let neighbours = [[-1, 0], [0, -1], [1, 0], [0, 1]]
+                .iter()
+                .map(|delta| [pos[0] + delta[0] as u32, pos[1] + delta[1] as u32])
+                .map(|neighbour_pos| self.particle_grid.0 .0.contains_key(&neighbour_pos))
+                .map(|does_exist| if does_exist { 1.0 } else { 0.0 })
+                .collect::<Vec<_>>();
+
+            let divergence = self.x_velocity.0 .0.get(pos).copied().unwrap_or(0.0) * neighbours[0]
+                + self.y_velocity.0 .0.get(pos).copied().unwrap_or(0.0) * neighbours[1]
+                - self
+                    .x_velocity
+                    .0
+                     .0
+                    .get(&[pos[0] + 1, pos[1]])
+                    .copied()
+                    .unwrap_or(0.0)
+                    * neighbours[2]
+                - self
+                    .y_velocity
+                    .0
+                     .0
+                    .get(&[pos[0], pos[1] + 1])
+                    .copied()
+                    .unwrap_or(0.0)
+                    * neighbours[3];
+            let total = neighbours.iter().sum();
+            if f64::is_subnormal(total) {
+                continue;
+            }
+            *self.x_velocity.0 .0.entry(*pos).or_insert(0.0) -= divergence / total;
+            *self.y_velocity.0 .0.entry(*pos).or_insert(0.0) -= divergence / total;
+            *self
+                .x_velocity
+                .0
+                 .0
+                .entry([pos[0] + 1, pos[1]])
+                .or_insert(0.0) += divergence / total;
+            *self
+                .x_velocity
+                .0
+                 .0
+                .entry([pos[0], pos[1] + 1])
+                .or_insert(0.0) += divergence / total;
+        }
     }
 
     fn grid_to_particle_velocity(&mut self) {
