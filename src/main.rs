@@ -80,14 +80,17 @@ trait GridParticleInterface {
     fn remove(&mut self, pos: [f64; 2]) {
         self.remove_grid_pos(Self::get_grid_pos(pos))
     }
-    fn get_weights(pos: [f64; 2]) -> [f64; 4] {
+    fn offset(pos: [f64; 2]) -> [f64; 2] {
         let pos = [
             pos[0] / CELL_SIZE + Self::OFFSET[0],
             pos[1] / CELL_SIZE + Self::OFFSET[1],
         ];
 
         let grid_pos = pos.map(f64::floor);
-        let offset = [pos[0] - grid_pos[0], pos[1] - grid_pos[1]];
+        [pos[0] - grid_pos[0], pos[1] - grid_pos[1]]
+    }
+    fn get_weights(pos: [f64; 2]) -> [f64; 4] {
+        let offset = Self::offset(pos);
 
         [
             offset[0] * offset[1],
@@ -145,7 +148,23 @@ impl GridParticleInterface for ParticleGrid {
 }
 
 #[derive(Default)]
-struct XVelocityGrid(Grid<f32>);
+struct XVelocityGrid(Grid<f64>);
+
+impl XVelocityGrid {
+    fn particle_to_cell(&mut self, velocity: f64, pos: [f64; 2]) {
+        let grid_pos = Self::get_grid_pos(pos);
+        let neighbours = [
+            [grid_pos[0], grid_pos[1]],
+            [grid_pos[0] + 1, grid_pos[1]],
+            [grid_pos[0], grid_pos[1] + 1],
+            [grid_pos[0] + 1, grid_pos[1] + 1],
+        ];
+        let weights = Self::get_weights(pos);
+        for (neighbour, weight) in neighbours.iter().zip(weights.iter()) {
+            *self.0 .0.entry(*neighbour).or_insert(0.0) += *weight * velocity;
+        }
+    }
+}
 
 impl GridParticleInterface for XVelocityGrid {
     const OFFSET: [f64; 2] = [0.0, 0.5];
@@ -156,7 +175,23 @@ impl GridParticleInterface for XVelocityGrid {
 }
 
 #[derive(Default)]
-struct YVelocityGrid(Grid<f32>);
+struct YVelocityGrid(Grid<f64>);
+
+impl YVelocityGrid {
+    fn particle_to_cell(&mut self, velocity: f64, pos: [f64; 2]) {
+        let grid_pos = Self::get_grid_pos(pos);
+        let neighbours = [
+            [grid_pos[0], grid_pos[1]],
+            [grid_pos[0] + 1, grid_pos[1]],
+            [grid_pos[0], grid_pos[1] + 1],
+            [grid_pos[0] + 1, grid_pos[1] + 1],
+        ];
+        let weights = Self::get_weights(pos);
+        for (neighbour, weight) in neighbours.iter().zip(weights.iter()) {
+            *self.0 .0.entry(*neighbour).or_insert(0.0) += *weight * velocity;
+        }
+    }
+}
 
 impl GridParticleInterface for YVelocityGrid {
     const OFFSET: [f64; 2] = [0.5, 0.0];
@@ -300,7 +335,12 @@ impl Simulation {
         self.x_velocity.0 .0.clear();
         self.y_velocity.0 .0.clear();
 
-        for particle in &self.particles {}
+        for particle in &self.particles {
+            self.x_velocity
+                .particle_to_cell(particle.velocity[0], particle.pos);
+            self.y_velocity
+                .particle_to_cell(particle.velocity[1], particle.pos);
+        }
     }
 
     fn make_incompressible(&mut self) {
