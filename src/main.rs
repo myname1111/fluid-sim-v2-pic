@@ -48,7 +48,7 @@ struct Particle {
 impl Particle {
     fn push_out_of_border(&mut self, size: [f64; 2]) {
         self.pos[0] = self.pos[0].clamp(0.0, size[0]);
-        self.pos[1] = self.pos[1].clamp(0.0, size[0]);
+        self.pos[1] = self.pos[1].clamp(0.0, size[1]);
     }
 
     fn simulate(&mut self, dt: f64, size: [f64; 2]) {
@@ -282,13 +282,17 @@ impl Simulation {
         }
 
         for (idxs, (distance, direction)) in collisions {
-            let shift = BASE_PARTICLE_RADIUS - distance / 2.0;
+            // let shift = BASE_PARTICLE_RADIUS - distance / 2.0;
+            let shift = -((2.0 * BASE_PARTICLE_RADIUS - distance) / (distance * 2.0)).min(0.5 * BASE_PARTICLE_RADIUS);
+            // if shift < 0.0 {
+            //     continue;
+            // }
             let old_grid_pos = idxs.map(|idx| ParticleGrid::get_grid_pos(self.particles[idx].pos));
 
-            self.particles[idxs[0]].pos[0] += shift * direction[0];
-            self.particles[idxs[1]].pos[0] -= shift * direction[0];
-            self.particles[idxs[0]].pos[1] += shift * direction[1];
-            self.particles[idxs[1]].pos[1] -= shift * direction[1];
+            self.particles[idxs[0]].pos[0] -= shift * direction[0];
+            self.particles[idxs[1]].pos[0] += shift * direction[0];
+            self.particles[idxs[0]].pos[1] -= shift * direction[1];
+            self.particles[idxs[1]].pos[1] += shift * direction[1];
 
             let new_grid_pos = idxs.map(|idx| ParticleGrid::get_grid_pos(self.particles[idx].pos));
 
@@ -301,10 +305,10 @@ impl Simulation {
                 })
                 .for_each(drop);
 
-            self.particles[idxs[0]].velocity[0] += shift * direction[0] * 4.0;
-            self.particles[idxs[1]].velocity[0] -= shift * direction[0] * 4.0;
-            self.particles[idxs[0]].velocity[1] += shift * direction[1] * 4.0;
-            self.particles[idxs[1]].velocity[1] -= shift * direction[1] * 4.0;
+            // self.particles[idxs[0]].velocity[0] += shift * direction[0] * 4.0;
+            // self.particles[idxs[1]].velocity[0] -= shift * direction[0] * 4.0;
+            // self.particles[idxs[0]].velocity[1] += shift * direction[1] * 4.0;
+            // self.particles[idxs[1]].velocity[1] -= shift * direction[1] * 4.0;
         }
     }
 
@@ -347,7 +351,7 @@ impl Simulation {
         for pos in self.particle_grid.0 .0.keys() {
             let neighbours = [[-1, 0], [0, -1], [1, 0], [0, 1]]
                 .iter()
-                .map(|delta| [pos[0] + delta[0] as u32, pos[1] + delta[1] as u32])
+                .map(|delta| [(pos[0] as i32 + delta[0]) as u32, (pos[1] as i32 + delta[1]) as u32])
                 .map(|neighbour_pos| self.particle_grid.0 .0.contains_key(&neighbour_pos))
                 .map(|does_exist| if does_exist { 1.0 } else { 0.0 })
                 .collect::<Vec<_>>();
@@ -396,10 +400,10 @@ impl Simulation {
     }
 
     fn simulate(&mut self, dt: f64) {
-        // self.simulate_particles(dt);
-        self.particle_to_grid_velocity();
-        self.make_incompressible();
-        self.grid_to_particle_velocity();
+        self.simulate_particles(dt);
+        // self.particle_to_grid_velocity();
+        // self.make_incompressible();
+        // self.grid_to_particle_velocity();
     }
 
     fn render<G: Graphics>(&self, ctx: Context, graphics_buffer: &mut G) {
@@ -440,7 +444,7 @@ fn main() {
             let dt = SystemTime::now()
                 .duration_since(prev_frame)
                 .expect("Time may have gone backwatds");
-            simulation.simulate(dt.as_secs_f64());
+            simulation.simulate(dt.as_secs_f64() * 0.1);
             graphics_buffer.clear_color([1.0, 1.0, 1.0, 1.0]);
             simulation.render(ctx, graphics_buffer);
             prev_frame = SystemTime::now();
