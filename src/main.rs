@@ -10,6 +10,8 @@ const BASE_PARTICLE_RADIUS: f64 = 10.0;
 const CELL_SIZE: f64 = BASE_PARTICLE_RADIUS * 2.0;
 const PARTICLE_COLOR: [f32; 4] = [0.0, 0.0, 1.0, 1.0];
 const GRAVITY: f64 = 100.0;
+const NUM_PARTICLE_ITERS: usize = 2;
+const COLLISION_RANDOMNESS: f64 = 0.1;
 
 trait Distance<T> {
     fn distance(self, other: Self) -> T;
@@ -39,7 +41,7 @@ impl Direction<f64> for [f64; 2] {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 struct Particle {
     pos: [f64; 2],
     velocity: [f64; 2],
@@ -281,18 +283,25 @@ impl Simulation {
             }
         }
 
-        for (idxs, (distance, direction)) in collisions {
-            // let shift = BASE_PARTICLE_RADIUS - distance / 2.0;
-            let shift = -((2.0 * BASE_PARTICLE_RADIUS - distance) / (distance * 2.0)).min(0.5 * BASE_PARTICLE_RADIUS);
+        for (idxs, (mut distance, mut direction)) in collisions {
+            let random_shift = [0.0, 0.0].direction([(idxs[0] as f64 * 10000.0 / 12345.0 % 1.0), (idxs[1] as f64 * 10000.0 / 12345.0 % 1.0)]);
+            if distance.is_subnormal() || distance == 0.0 {
+                distance = 0.5 * BASE_PARTICLE_RADIUS;
+                direction = random_shift;
+            }
+            let shift = ((2.0 * BASE_PARTICLE_RADIUS - distance) / (distance * 2.0)).min(2.0 * BASE_PARTICLE_RADIUS);
+            // let shift = (2.0 * BASE_PARTICLE_RADIUS - distance) / 2.0;
+            direction[0] += random_shift[0] * COLLISION_RANDOMNESS;
+            direction[1] += random_shift[1] * COLLISION_RANDOMNESS;
             // if shift < 0.0 {
             //     continue;
             // }
             let old_grid_pos = idxs.map(|idx| ParticleGrid::get_grid_pos(self.particles[idx].pos));
 
-            self.particles[idxs[0]].pos[0] -= shift * direction[0];
-            self.particles[idxs[1]].pos[0] += shift * direction[0];
-            self.particles[idxs[0]].pos[1] -= shift * direction[1];
-            self.particles[idxs[1]].pos[1] += shift * direction[1];
+            self.particles[idxs[0]].pos[0] += shift * direction[0];
+            self.particles[idxs[1]].pos[0] -= shift * direction[0];
+            self.particles[idxs[0]].pos[1] += shift * direction[1];
+            self.particles[idxs[1]].pos[1] -= shift * direction[1];
 
             let new_grid_pos = idxs.map(|idx| ParticleGrid::get_grid_pos(self.particles[idx].pos));
 
@@ -332,7 +341,9 @@ impl Simulation {
                 .move_particle_grid_pos(old_grid_pos, new_grid_pos, idx);
         }
 
-        self.self_collide_particles();
+        for _ in 0..NUM_PARTICLE_ITERS {
+            self.self_collide_particles();
+        }
     }
 
     fn particle_to_grid_velocity(&mut self) {
@@ -436,6 +447,20 @@ fn main() {
             });
         }
     }
+    // simulation.spawn(Particle {
+    //     pos: [
+    //         100.0 as f64 * BASE_PARTICLE_RADIUS,
+    //         100.0 as f64 * BASE_PARTICLE_RADIUS,
+    //     ],
+    //     velocity: [0.0, 0.0],
+    // });
+    // simulation.spawn(Particle {
+    //     pos: [
+    //         100.0 as f64 * BASE_PARTICLE_RADIUS,
+    //         100.0 as f64 * BASE_PARTICLE_RADIUS,
+    //     ],
+    //     velocity: [0.0, 0.0],
+    // });
 
     window.set_lazy(false);
     let mut prev_frame = SystemTime::now();
