@@ -9,8 +9,8 @@ use piston_window::{ellipse::circle, *};
 const BASE_PARTICLE_RADIUS: f64 = 10.0;
 const CELL_SIZE: f64 = BASE_PARTICLE_RADIUS * 2.0;
 const PARTICLE_COLOR: [f32; 4] = [0.0, 0.0, 1.0, 1.0];
-const GRAVITY: f64 = 100.0;
-const NUM_PARTICLE_ITERS: usize = 2;
+const GRAVITY: f64 = 10.0;
+const NUM_PARTICLE_ITERS: usize = 10;
 const COLLISION_RANDOMNESS: f64 = 0.1;
 
 trait Distance<T> {
@@ -225,6 +225,7 @@ impl Simulation {
         self.particles.push(particle);
         let new_index = self.particles.len() - 1;
         let grid_pos = ParticleGrid::get_grid_pos(particle.pos);
+        dbg!(grid_pos);
         if let Some(hashset) = self.particle_grid.0 .0.get_mut(&grid_pos) {
             hashset.insert(new_index);
         } else {
@@ -235,7 +236,7 @@ impl Simulation {
     }
 
     fn self_collide_particles(&mut self) {
-        let mut collisions = HashMap::new();
+        let mut collisions = HashSet::new();
 
         for (pos, particles) in &self.particle_grid.0 .0 {
             let other_particles = (-1i32..1i32)
@@ -262,7 +263,7 @@ impl Simulation {
                         [*particle_idx, *other_particle_idx]
                     };
 
-                    if collisions.contains_key(&key) {
+                    if collisions.contains(&key) {
                         continue;
                     }
 
@@ -270,21 +271,17 @@ impl Simulation {
                     let other_particle = self.particles[*other_particle_idx];
 
                     let distance = particle.pos.distance(other_particle.pos);
-                    let direction = if particle_idx < other_particle_idx {
-                        other_particle.pos.direction(particle.pos)
-                    } else {
-                        particle.pos.direction(other_particle.pos)
-                    };
-
                     if distance < 2.0 * BASE_PARTICLE_RADIUS {
-                        collisions.insert(key, (distance, direction));
+                        collisions.insert(key);
                     }
                 }
             }
         }
 
-        for (idxs, (mut distance, mut direction)) in collisions {
+        for idxs in collisions {
             let random_shift = [0.0, 0.0].direction([(idxs[0] as f64 * 10000.0 / 12345.0 % 1.0), (idxs[1] as f64 * 10000.0 / 12345.0 % 1.0)]);
+            let mut distance = self.particles[idxs[0]].pos.distance(self.particles[idxs[1]].pos);
+            let mut direction = self.particles[idxs[0]].pos.direction(self.particles[idxs[1]].pos);
             if distance.is_subnormal() || distance == 0.0 {
                 distance = 0.5 * BASE_PARTICLE_RADIUS;
                 direction = random_shift;
@@ -302,6 +299,8 @@ impl Simulation {
             self.particles[idxs[1]].pos[0] -= shift * direction[0];
             self.particles[idxs[0]].pos[1] += shift * direction[1];
             self.particles[idxs[1]].pos[1] -= shift * direction[1];
+
+            dbg!(shift, direction);
 
             let new_grid_pos = idxs.map(|idx| ParticleGrid::get_grid_pos(self.particles[idx].pos));
 
@@ -340,7 +339,7 @@ impl Simulation {
             self.particle_grid
                 .move_particle_grid_pos(old_grid_pos, new_grid_pos, idx);
         }
-
+        
         for _ in 0..NUM_PARTICLE_ITERS {
             self.self_collide_particles();
         }
@@ -417,6 +416,16 @@ impl Simulation {
         // self.grid_to_particle_velocity();
     }
 
+    fn render_cell<G: Graphics>(&self, ctx: Context, graphics_buffer: &mut G, x: u32, y: u32) {
+        let Some(cell) = self.particle_grid.0.0.get(&[x, y]) else {
+            return
+        };
+
+        if !cell.is_empty() {
+            rectangle([1.0, 0.0, 0.0, 0.2], [x as f64 * CELL_SIZE, y as f64 * CELL_SIZE, CELL_SIZE, CELL_SIZE], ctx.transform, graphics_buffer)
+        }
+    }
+
     fn render<G: Graphics>(&self, ctx: Context, graphics_buffer: &mut G) {
         for particle in &self.particles {
             ellipse(
@@ -425,6 +434,11 @@ impl Simulation {
                 ctx.transform,
                 graphics_buffer,
             );
+        }
+        for x in 0..self.size[0] {
+            for y in 0..self.size[1] {
+                self.render_cell(ctx, graphics_buffer, x, y)
+            }
         }
     }
 }
@@ -436,31 +450,31 @@ fn main() {
         .unwrap();
 
     let mut simulation = Simulation::new([10, 10]);
-    for x in 0..10 {
-        for y in 0..10 {
-            simulation.spawn(Particle {
-                pos: [
-                    100.0 + x as f64 * BASE_PARTICLE_RADIUS,
-                    100.0 + y as f64 * BASE_PARTICLE_RADIUS,
-                ],
-                velocity: [0.0, 0.0],
-            });
-        }
-    }
-    // simulation.spawn(Particle {
-    //     pos: [
-    //         100.0 as f64 * BASE_PARTICLE_RADIUS,
-    //         100.0 as f64 * BASE_PARTICLE_RADIUS,
-    //     ],
-    //     velocity: [0.0, 0.0],
-    // });
-    // simulation.spawn(Particle {
-    //     pos: [
-    //         100.0 as f64 * BASE_PARTICLE_RADIUS,
-    //         100.0 as f64 * BASE_PARTICLE_RADIUS,
-    //     ],
-    //     velocity: [0.0, 0.0],
-    // });
+    // for x in 0..10 {
+    //     for y in 0..10 {
+    //         simulation.spawn(Particle {
+    //             pos: [
+    //                 100.0 + x as f64 * BASE_PARTICLE_RADIUS,
+    //                 100.0 + y as f64 * BASE_PARTICLE_RADIUS,
+    //             ],
+    //             velocity: [0.0, 0.0],
+    //         });
+    //     }
+    // }
+    simulation.spawn(Particle {
+        pos: [
+            100.0,
+            100.0,
+        ],
+        velocity: [0.0, 0.0],
+    });
+    simulation.spawn(Particle {
+        pos: [
+            100.0,
+            150.0,
+        ],
+        velocity: [0.0, 0.0],
+    });
 
     window.set_lazy(false);
     let mut prev_frame = SystemTime::now();
