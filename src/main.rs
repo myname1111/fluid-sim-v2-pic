@@ -225,7 +225,6 @@ impl Simulation {
         self.particles.push(particle);
         let new_index = self.particles.len() - 1;
         let grid_pos = ParticleGrid::get_grid_pos(particle.pos);
-        dbg!(grid_pos);
         if let Some(hashset) = self.particle_grid.0.0.get_mut(&grid_pos) {
             hashset.insert(new_index);
         } else {
@@ -481,25 +480,25 @@ fn main() {
         .unwrap();
 
     let mut simulation = Simulation::new([10, 10]);
-    // for x in 0..10 {
-    //     for y in 0..10 {
-    //         simulation.spawn(Particle {
-    //             pos: [
-    //                 100.0 + x as f64 * BASE_PARTICLE_RADIUS,
-    //                 100.0 + y as f64 * BASE_PARTICLE_RADIUS,
-    //             ],
-    //             velocity: [0.0, 0.0],
-    //         });
-    //     }
-    // }
-    simulation.spawn(Particle {
-        pos: [100.0, 100.0],
-        velocity: [0.0, 0.0],
-    });
-    simulation.spawn(Particle {
-        pos: [100.0, 1500.0],
-        velocity: [0.0, 0.0],
-    });
+    for x in 0..10 {
+        for y in 0..10 {
+            simulation.spawn(Particle {
+                pos: [
+                    100.0 + x as f64 * BASE_PARTICLE_RADIUS,
+                    100.0 + y as f64 * BASE_PARTICLE_RADIUS,
+                ],
+                velocity: [0.0, 0.0],
+            });
+        }
+    }
+    // simulation.spawn(Particle {
+    //     pos: [100.0, 100.0],
+    //     velocity: [0.0, 0.0],
+    // });
+    // simulation.spawn(Particle {
+    //     pos: [100.0, 1500.0],
+    //     velocity: [0.0, 0.0],
+    // });
 
     window.set_lazy(false);
     let mut prev_frame = SystemTime::now();
