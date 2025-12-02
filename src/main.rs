@@ -185,6 +185,10 @@ where
             *self.0.0.entry(*neighbour).or_insert(0.0) += *weight * velocity;
         }
     }
+
+    fn grid_to_particle(&self, particle_pos: [f64; 2]) -> f64 {
+        todo!()
+    }
 }
 
 impl GridParticleInterface for VelocityGrid<X> {
@@ -423,6 +427,10 @@ impl Simulation {
     }
 
     fn grid_to_particle_velocity(&mut self) {
+        for particle in &mut self.particles {
+            particle.velocity[0] += self.x_velocity.grid_to_particle(particle.pos);
+            particle.velocity[1] += self.y_velocity.grid_to_particle(particle.pos);
+        }
         // TODO
     }
 
