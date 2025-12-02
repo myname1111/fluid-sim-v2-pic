@@ -50,6 +50,14 @@ struct Particle {
 
 impl Particle {
     fn push_out_of_border(&mut self, size: [f64; 2]) {
+        if self.pos[0] > size[0] || self.pos[0] <= 0.0 {
+            self.velocity[0] = 0.0
+        }
+
+        if self.pos[1] > size[1] || self.pos[1] <= 0.0 {
+            self.velocity[1] = 0.0
+        }
+
         self.pos[0] = self.pos[0].clamp(0.0, size[0]);
         self.pos[1] = self.pos[1].clamp(0.0, size[1]);
     }
