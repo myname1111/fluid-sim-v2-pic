@@ -1,5 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
+    marker::PhantomData,
     time::SystemTime,
 };
 
@@ -72,11 +73,14 @@ struct ParticleGrid(Grid<HashSet<usize>>);
 trait GridParticleInterface {
     const OFFSET: [f64; 2];
 
-    fn get_grid_pos(particle_pos: [f64; 2]) -> [u32; 2] {
+    fn get_grid_pos_continuous(particle_pos: [f64; 2]) -> [f64; 2] {
         [
-            (particle_pos[0] / CELL_SIZE + Self::OFFSET[0]).floor() as u32,
-            (particle_pos[1] / CELL_SIZE + Self::OFFSET[1]).floor() as u32,
+            particle_pos[0] / CELL_SIZE + Self::OFFSET[0],
+            particle_pos[1] / CELL_SIZE + Self::OFFSET[1],
         ]
+    }
+    fn get_grid_pos(particle_pos: [f64; 2]) -> [u32; 2] {
+        Self::get_grid_pos_continuous(particle_pos).map(|x| x.floor() as u32)
     }
     fn remove_grid_pos(&mut self, grid_pos: [u32; 2]);
     fn remove(&mut self, pos: [f64; 2]) {
@@ -149,10 +153,25 @@ impl GridParticleInterface for ParticleGrid {
     }
 }
 
-#[derive(Default)]
-struct XVelocityGrid(Grid<f64>);
+trait PosDirection {}
 
-impl XVelocityGrid {
+#[derive(Clone, Copy, Default)]
+struct X;
+
+impl PosDirection for X {}
+
+#[derive(Clone, Copy, Default)]
+struct Y;
+
+impl PosDirection for Y {}
+
+#[derive(Default)]
+struct VelocityGrid<P: PosDirection>(Grid<f64>, PhantomData<P>);
+
+impl<P: PosDirection> VelocityGrid<P>
+where
+    VelocityGrid<P>: GridParticleInterface,
+{
     fn particle_to_cell(&mut self, velocity: f64, pos: [f64; 2]) {
         let grid_pos = Self::get_grid_pos(pos);
         let neighbours = [
@@ -168,7 +187,7 @@ impl XVelocityGrid {
     }
 }
 
-impl GridParticleInterface for XVelocityGrid {
+impl GridParticleInterface for VelocityGrid<X> {
     const OFFSET: [f64; 2] = [0.0, 0.5];
 
     fn remove_grid_pos(&mut self, grid_pos: [u32; 2]) {
@@ -176,36 +195,18 @@ impl GridParticleInterface for XVelocityGrid {
     }
 }
 
-#[derive(Default)]
-struct YVelocityGrid(Grid<f64>);
-
-impl YVelocityGrid {
-    fn particle_to_cell(&mut self, velocity: f64, pos: [f64; 2]) {
-        let grid_pos = Self::get_grid_pos(pos);
-        let neighbours = [
-            [grid_pos[0], grid_pos[1]],
-            [grid_pos[0] + 1, grid_pos[1]],
-            [grid_pos[0], grid_pos[1] + 1],
-            [grid_pos[0] + 1, grid_pos[1] + 1],
-        ];
-        let weights = Self::get_weights(pos);
-        for (neighbour, weight) in neighbours.iter().zip(weights.iter()) {
-            *self.0.0.entry(*neighbour).or_insert(0.0) += *weight * velocity;
-        }
-    }
-}
-
-impl GridParticleInterface for YVelocityGrid {
+impl GridParticleInterface for VelocityGrid<Y> {
     const OFFSET: [f64; 2] = [0.5, 0.0];
 
     fn remove_grid_pos(&mut self, grid_pos: [u32; 2]) {
         self.0.0.remove(&grid_pos);
     }
 }
+
 struct Simulation {
     particles: Vec<Particle>,
-    x_velocity: XVelocityGrid,
-    y_velocity: YVelocityGrid,
+    x_velocity: VelocityGrid<X>,
+    y_velocity: VelocityGrid<Y>,
     particle_grid: ParticleGrid,
     size: [u32; 2],
 }
@@ -214,8 +215,8 @@ impl Simulation {
     fn new(size: [u32; 2]) -> Simulation {
         Simulation {
             particles: vec![],
-            x_velocity: XVelocityGrid::default(),
-            y_velocity: YVelocityGrid::default(),
+            x_velocity: VelocityGrid::<X>::default(),
+            y_velocity: VelocityGrid::<Y>::default(),
             particle_grid: ParticleGrid::default(),
             size,
         }
@@ -427,9 +428,9 @@ impl Simulation {
 
     fn simulate(&mut self, dt: f64) {
         self.simulate_particles(dt);
-        // self.particle_to_grid_velocity();
-        // self.make_incompressible();
-        // self.grid_to_particle_velocity();
+        self.particle_to_grid_velocity();
+        self.make_incompressible();
+        self.grid_to_particle_velocity();
     }
 
     fn render_cell<G: Graphics>(&self, ctx: Context, graphics_buffer: &mut G, x: u32, y: u32) {
