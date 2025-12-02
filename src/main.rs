@@ -83,12 +83,9 @@ trait GridParticleInterface {
         Self::get_grid_pos_continuous(particle_pos).map(|x| x.floor() as u32)
     }
     fn offset(pos: [f64; 2]) -> [f64; 2] {
-        let pos = [
-            pos[0] / CELL_SIZE + Self::OFFSET[0],
-            pos[1] / CELL_SIZE + Self::OFFSET[1],
-        ];
-
+        let pos = Self::get_grid_pos_continuous(pos);
         let grid_pos = pos.map(f64::floor);
+
         [pos[0] - grid_pos[0], pos[1] - grid_pos[1]]
     }
     fn get_weights(pos: [f64; 2]) -> [f64; 4] {
@@ -139,17 +136,17 @@ impl GridParticleInterface for ParticleGrid {
 
 trait PosDirection {}
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, Debug)]
 struct X;
 
 impl PosDirection for X {}
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, Debug)]
 struct Y;
 
 impl PosDirection for Y {}
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct VelocityGrid<P: PosDirection>(Grid<f64>, PhantomData<P>);
 
 impl<P: PosDirection> VelocityGrid<P>
@@ -183,7 +180,7 @@ where
         let mut total = 0.0;
 
         for (neighbour, weight) in neighbours.iter().zip(weights.iter()) {
-            total = self.0.0.get(neighbour).cloned().unwrap_or(0.0) * *weight;
+            total += self.0.0.get(neighbour).cloned().unwrap_or(0.0) * *weight;
         }
         total
     }
@@ -421,34 +418,31 @@ impl Simulation {
             particle.velocity[0] += self.x_velocity.grid_to_particle(particle.pos);
             particle.velocity[1] += self.y_velocity.grid_to_particle(particle.pos);
         }
-        // TODO
     }
 
     fn simulate(&mut self, dt: f64) {
         self.simulate_particles(dt);
         self.particle_to_grid_velocity();
         // self.make_incompressible();
-        self.grid_to_particle_velocity();
+        // self.grid_to_particle_velocity();
     }
 
     fn render_cell<G: Graphics>(&self, ctx: Context, graphics_buffer: &mut G, x: u32, y: u32) {
-        let Some(cell) = self.particle_grid.0.0.get(&[x, y]) else {
+        let Some(cell) = self.y_velocity.0.0.get(&[x, y]) else {
             return;
         };
 
-        if !cell.is_empty() {
-            rectangle(
-                [1.0, 0.0, 0.0, 0.2],
-                [
-                    x as f64 * CELL_SIZE,
-                    y as f64 * CELL_SIZE,
-                    CELL_SIZE,
-                    CELL_SIZE,
-                ],
-                ctx.transform,
-                graphics_buffer,
-            )
-        }
+        rectangle(
+            [1.0, 0.0, 0.0, *cell as f32 / 32.0],
+            [
+                (x as f64 - VelocityGrid::<Y>::OFFSET[0]) * CELL_SIZE,
+                (y as f64 - VelocityGrid::<Y>::OFFSET[1]) * CELL_SIZE,
+                CELL_SIZE,
+                CELL_SIZE,
+            ],
+            ctx.transform,
+            graphics_buffer,
+        )
     }
 
     fn render<G: Graphics>(&self, ctx: Context, graphics_buffer: &mut G) {
@@ -468,7 +462,7 @@ impl Simulation {
     }
 
     fn debug(&self) {
-        dbg!(&self.particle_grid);
+        dbg!(&self.y_velocity);
     }
 }
 
@@ -492,12 +486,12 @@ fn main() {
     // }
     simulation.spawn(Particle {
         pos: [100.0, 100.0],
-        velocity: [0.0, -20.0],
-    });
-    simulation.spawn(Particle {
-        pos: [100.0, 1500.0],
         velocity: [0.0, 0.0],
     });
+    // simulation.spawn(Particle {
+    //     pos: [100.0, 1500.0],
+    //     velocity: [0.0, 0.0],
+    // });
 
     window.set_lazy(false);
     let mut prev_frame = SystemTime::now();
@@ -506,7 +500,7 @@ fn main() {
             let dt = SystemTime::now()
                 .duration_since(prev_frame)
                 .expect("Time may have gone backwatds");
-            simulation.simulate(dt.as_secs_f64());
+            simulation.simulate(dt.as_secs_f64() / 4.0);
             graphics_buffer.clear_color([1.0, 1.0, 1.0, 1.0]);
             simulation.render(ctx, graphics_buffer);
             prev_frame = SystemTime::now();
