@@ -82,10 +82,6 @@ trait GridParticleInterface {
     fn get_grid_pos(particle_pos: [f64; 2]) -> [u32; 2] {
         Self::get_grid_pos_continuous(particle_pos).map(|x| x.floor() as u32)
     }
-    fn remove_grid_pos(&mut self, grid_pos: [u32; 2]);
-    fn remove(&mut self, pos: [f64; 2]) {
-        self.remove_grid_pos(Self::get_grid_pos(pos))
-    }
     fn offset(pos: [f64; 2]) -> [f64; 2] {
         let pos = [
             pos[0] / CELL_SIZE + Self::OFFSET[0],
@@ -135,22 +131,10 @@ impl ParticleGrid {
 
         remove_old
     }
-
-    fn move_particle(&mut self, old: [f64; 2], new: [f64; 2], particle_idx: usize) -> bool {
-        self.move_particle_grid_pos(
-            Self::get_grid_pos(old),
-            Self::get_grid_pos(new),
-            particle_idx,
-        )
-    }
 }
 
 impl GridParticleInterface for ParticleGrid {
     const OFFSET: [f64; 2] = [0.0, 0.0];
-
-    fn remove_grid_pos(&mut self, grid_pos: [u32; 2]) {
-        self.0.0.remove(&grid_pos);
-    }
 }
 
 trait PosDirection {}
@@ -207,18 +191,10 @@ where
 
 impl GridParticleInterface for VelocityGrid<X> {
     const OFFSET: [f64; 2] = [0.0, 0.5];
-
-    fn remove_grid_pos(&mut self, grid_pos: [u32; 2]) {
-        self.0.0.remove(&grid_pos);
-    }
 }
 
 impl GridParticleInterface for VelocityGrid<Y> {
     const OFFSET: [f64; 2] = [0.5, 0.0];
-
-    fn remove_grid_pos(&mut self, grid_pos: [u32; 2]) {
-        self.0.0.remove(&grid_pos);
-    }
 }
 
 struct Simulation {
@@ -451,7 +427,7 @@ impl Simulation {
     fn simulate(&mut self, dt: f64) {
         self.simulate_particles(dt);
         self.particle_to_grid_velocity();
-        self.make_incompressible();
+        // self.make_incompressible();
         self.grid_to_particle_velocity();
     }
 
@@ -503,25 +479,25 @@ fn main() {
         .unwrap();
 
     let mut simulation = Simulation::new([10, 10]);
-    for x in 0..10 {
-        for y in 0..10 {
-            simulation.spawn(Particle {
-                pos: [
-                    100.0 + x as f64 * BASE_PARTICLE_RADIUS,
-                    100.0 + y as f64 * BASE_PARTICLE_RADIUS,
-                ],
-                velocity: [0.0, 0.0],
-            });
-        }
-    }
-    // simulation.spawn(Particle {
-    //     pos: [100.0, 100.0],
-    //     velocity: [0.0, 0.0],
-    // });
-    // simulation.spawn(Particle {
-    //     pos: [100.0, 1500.0],
-    //     velocity: [0.0, 0.0],
-    // });
+    // for x in 0..10 {
+    //     for y in 0..10 {
+    //         simulation.spawn(Particle {
+    //             pos: [
+    //                 100.0 + x as f64 * BASE_PARTICLE_RADIUS,
+    //                 100.0 + y as f64 * BASE_PARTICLE_RADIUS,
+    //             ],
+    //             velocity: [0.0, 0.0],
+    //         });
+    //     }
+    // }
+    simulation.spawn(Particle {
+        pos: [100.0, 100.0],
+        velocity: [0.0, -20.0],
+    });
+    simulation.spawn(Particle {
+        pos: [100.0, 1500.0],
+        velocity: [0.0, 0.0],
+    });
 
     window.set_lazy(false);
     let mut prev_frame = SystemTime::now();
