@@ -488,10 +488,10 @@ fn main() {
         pos: [100.0, 100.0],
         velocity: [0.0, 0.0],
     });
-    // simulation.spawn(Particle {
-    //     pos: [100.0, 1500.0],
-    //     velocity: [0.0, 0.0],
-    // });
+    simulation.spawn(Particle {
+        pos: [100.0, 150.0],
+        velocity: [0.0, 0.0],
+    });
 
     window.set_lazy(false);
     let mut prev_frame = SystemTime::now();
