@@ -187,7 +187,21 @@ where
     }
 
     fn grid_to_particle(&self, particle_pos: [f64; 2]) -> f64 {
-        todo!()
+        let grid_pos = Self::get_grid_pos(particle_pos);
+        let neighbours = [
+            [grid_pos[0], grid_pos[1]],
+            [grid_pos[0] + 1, grid_pos[1]],
+            [grid_pos[0], grid_pos[1] + 1],
+            [grid_pos[0] + 1, grid_pos[1] + 1],
+        ];
+
+        let weights = Self::get_weights(particle_pos);
+        let mut total = 0.0;
+
+        for (neighbour, weight) in neighbours.iter().zip(weights.iter()) {
+            total = self.0.0.get(neighbour).cloned().unwrap_or(0.0) * *weight;
+        }
+        total
     }
 }
 
