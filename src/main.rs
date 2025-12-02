@@ -431,8 +431,8 @@ impl Simulation {
     fn simulate(&mut self, dt: f64) {
         self.simulate_particles(dt);
         self.particle_to_grid_velocity();
-        // self.make_incompressible();
-        // self.grid_to_particle_velocity();
+        self.make_incompressible();
+        self.grid_to_particle_velocity();
     }
 
     fn render_cell<G: Graphics>(&self, ctx: Context, graphics_buffer: &mut G, x: u32, y: u32) {
@@ -481,25 +481,25 @@ fn main() {
         .unwrap();
 
     let mut simulation = Simulation::new([10, 10]);
-    // for x in 0..10 {
-    //     for y in 0..10 {
-    //         simulation.spawn(Particle {
-    //             pos: [
-    //                 100.0 + x as f64 * BASE_PARTICLE_RADIUS,
-    //                 100.0 + y as f64 * BASE_PARTICLE_RADIUS,
-    //             ],
-    //             velocity: [0.0, 0.0],
-    //         });
-    //     }
-    // }
-    simulation.spawn(Particle {
-        pos: [100.0, 100.0],
-        velocity: [0.0, 0.0],
-    });
-    simulation.spawn(Particle {
-        pos: [100.0, 150.0],
-        velocity: [0.0, 0.0],
-    });
+    for x in 0..10 {
+        for y in 0..10 {
+            simulation.spawn(Particle {
+                pos: [
+                    100.0 + x as f64 * BASE_PARTICLE_RADIUS,
+                    100.0 + y as f64 * BASE_PARTICLE_RADIUS,
+                ],
+                velocity: [0.0, 0.0],
+            });
+        }
+    }
+    // simulation.spawn(Particle {
+    //     pos: [100.0, 100.0],
+    //     velocity: [0.0, 0.0],
+    // });
+    // simulation.spawn(Particle {
+    //     pos: [100.0, 150.0],
+    //     velocity: [0.0, 0.0],
+    // });
 
     window.set_lazy(false);
     let mut prev_frame = SystemTime::now();
