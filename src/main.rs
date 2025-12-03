@@ -370,7 +370,7 @@ impl Simulation {
 
     fn make_incompressible(&mut self) {
         for pos in self.particle_grid.0.0.keys() {
-            let neighbours = [[-1, 0], [0, -1], [1, 0], [0, 1]]
+            let is_neighbour_exist = [[0, 0], [0, 0], [1, 0], [0, 1]]
                 .iter()
                 .map(|delta| {
                     [
@@ -382,8 +382,9 @@ impl Simulation {
                 .map(|does_exist| if does_exist { 1.0 } else { 0.0 })
                 .collect::<Vec<_>>();
 
-            let divergence = self.x_velocity.0.0.get(pos).copied().unwrap_or(0.0) * neighbours[0]
-                + self.y_velocity.0.0.get(pos).copied().unwrap_or(0.0) * neighbours[1]
+            let divergence = self.x_velocity.0.0.get(pos).copied().unwrap_or(0.0)
+                * is_neighbour_exist[0]
+                + self.y_velocity.0.0.get(pos).copied().unwrap_or(0.0) * is_neighbour_exist[1]
                 - self
                     .x_velocity
                     .0
@@ -391,7 +392,7 @@ impl Simulation {
                     .get(&[pos[0] + 1, pos[1]])
                     .copied()
                     .unwrap_or(0.0)
-                    * neighbours[2]
+                    * is_neighbour_exist[2]
                 - self
                     .y_velocity
                     .0
@@ -399,8 +400,8 @@ impl Simulation {
                     .get(&[pos[0], pos[1] + 1])
                     .copied()
                     .unwrap_or(0.0)
-                    * neighbours[3];
-            let total = neighbours.iter().sum();
+                    * is_neighbour_exist[3];
+            let total = is_neighbour_exist.iter().sum();
             if f64::is_subnormal(total) {
                 continue;
             }
