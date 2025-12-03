@@ -370,7 +370,7 @@ impl Simulation {
 
     fn make_incompressible(&mut self) {
         for pos in self.particle_grid.0.0.keys() {
-            let neighbour_pos = [[0, -1], [-1, 0], [0, 0], [0, 0]].iter().map(|delta| {
+            let neighbour_pos = [[0, 0], [0, 0], [1, 0], [0, 1]].iter().map(|delta| {
                 [
                     (pos[0] as i32 + delta[0]) as u32,
                     (pos[1] as i32 + delta[1]) as u32,
@@ -419,19 +419,10 @@ impl Simulation {
             if f64::is_subnormal(total) {
                 continue;
             }
-
-            if let Some(vel) = self.x_velocity.0.0.get_mut(&neighbour_pos[0]) {
-                *vel -= divergence / total
-            }
-            if let Some(vel) = self.y_velocity.0.0.get_mut(&neighbour_pos[1]) {
-                *vel -= divergence / total
-            }
-            if let Some(vel) = self.x_velocity.0.0.get_mut(&neighbour_pos[2]) {
-                *vel += divergence / total
-            }
-            if let Some(vel) = self.y_velocity.0.0.get_mut(&neighbour_pos[3]) {
-                *vel += divergence / total
-            }
+            *self.x_velocity.0.0.entry(neighbour_pos[0]).or_insert(0.0) -= divergence / total;
+            *self.y_velocity.0.0.entry(neighbour_pos[1]).or_insert(0.0) -= divergence / total;
+            *self.x_velocity.0.0.entry(neighbour_pos[2]).or_insert(0.0) += divergence / total;
+            *self.y_velocity.0.0.entry(neighbour_pos[3]).or_insert(0.0) += divergence / total;
         }
     }
 
@@ -457,7 +448,12 @@ impl Simulation {
         };
 
         rectangle(
-            [1.0, 0.0, 0.0, *cell as f32 / 32.0],
+            [
+                if cell.is_sign_positive() { 1.0 } else { 0.0 },
+                if cell.is_sign_positive() { 0.0 } else { 1.0 },
+                0.0,
+                cell.abs() as f32 / 256.0,
+            ],
             [
                 (x as f64 - VelocityGrid::<Y>::OFFSET[0]) * CELL_SIZE,
                 (y as f64 - VelocityGrid::<Y>::OFFSET[1]) * CELL_SIZE,
