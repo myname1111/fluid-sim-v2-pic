@@ -370,26 +370,40 @@ impl Simulation {
 
     fn make_incompressible(&mut self) {
         for pos in self.particle_grid.0.0.keys() {
-            let is_neighbour_exist = [[0, 0], [0, 0], [1, 0], [0, 1]]
-                .iter()
-                .map(|delta| {
-                    [
-                        (pos[0] as i32 + delta[0]) as u32,
-                        (pos[1] as i32 + delta[1]) as u32,
-                    ]
-                })
+            let neighbour_pos = [[0, -1], [-1, 0], [0, 0], [0, 0]].iter().map(|delta| {
+                [
+                    (pos[0] as i32 + delta[0]) as u32,
+                    (pos[1] as i32 + delta[1]) as u32,
+                ]
+            });
+            let is_neighbour_exist = neighbour_pos
+                .clone()
                 .map(|neighbour_pos| self.particle_grid.0.0.contains_key(&neighbour_pos))
                 .map(|does_exist| if does_exist { 1.0 } else { 0.0 })
                 .collect::<Vec<_>>();
+            let neighbour_pos = neighbour_pos.collect::<Vec<_>>();
 
-            let divergence = self.x_velocity.0.0.get(pos).copied().unwrap_or(0.0)
+            let divergence = self
+                .x_velocity
+                .0
+                .0
+                .get(&neighbour_pos[0])
+                .copied()
+                .unwrap_or(0.0)
                 * is_neighbour_exist[0]
-                + self.y_velocity.0.0.get(pos).copied().unwrap_or(0.0) * is_neighbour_exist[1]
+                + self
+                    .y_velocity
+                    .0
+                    .0
+                    .get(&neighbour_pos[1])
+                    .copied()
+                    .unwrap_or(0.0)
+                    * is_neighbour_exist[1]
                 - self
                     .x_velocity
                     .0
                     .0
-                    .get(&[pos[0] + 1, pos[1]])
+                    .get(&neighbour_pos[2])
                     .copied()
                     .unwrap_or(0.0)
                     * is_neighbour_exist[2]
@@ -397,7 +411,7 @@ impl Simulation {
                     .y_velocity
                     .0
                     .0
-                    .get(&[pos[0], pos[1] + 1])
+                    .get(&neighbour_pos[3])
                     .copied()
                     .unwrap_or(0.0)
                     * is_neighbour_exist[3];
@@ -405,20 +419,19 @@ impl Simulation {
             if f64::is_subnormal(total) {
                 continue;
             }
-            *self.x_velocity.0.0.entry(*pos).or_insert(0.0) -= divergence / total;
-            *self.y_velocity.0.0.entry(*pos).or_insert(0.0) -= divergence / total;
-            *self
-                .x_velocity
-                .0
-                .0
-                .entry([pos[0] + 1, pos[1]])
-                .or_insert(0.0) += divergence / total;
-            *self
-                .x_velocity
-                .0
-                .0
-                .entry([pos[0], pos[1] + 1])
-                .or_insert(0.0) += divergence / total;
+
+            if let Some(vel) = self.x_velocity.0.0.get_mut(&neighbour_pos[0]) {
+                *vel -= divergence / total
+            }
+            if let Some(vel) = self.y_velocity.0.0.get_mut(&neighbour_pos[1]) {
+                *vel -= divergence / total
+            }
+            if let Some(vel) = self.x_velocity.0.0.get_mut(&neighbour_pos[2]) {
+                *vel += divergence / total
+            }
+            if let Some(vel) = self.y_velocity.0.0.get_mut(&neighbour_pos[3]) {
+                *vel += divergence / total
+            }
         }
     }
 
@@ -432,7 +445,9 @@ impl Simulation {
     fn simulate(&mut self, dt: f64) {
         self.simulate_particles(dt);
         self.particle_to_grid_velocity();
-        self.make_incompressible();
+        for _ in 0..3 {
+            self.make_incompressible();
+        }
         self.grid_to_particle_velocity();
     }
 
