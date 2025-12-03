@@ -5,7 +5,7 @@ use std::{
 };
 
 use piston::WindowSettings;
-use piston_window::{ellipse::circle, *};
+use piston_window::{color::BLACK, ellipse::circle, *};
 
 const BASE_PARTICLE_RADIUS: f64 = 10.0;
 const CELL_SIZE: f64 = BASE_PARTICLE_RADIUS * 2.0;
@@ -443,26 +443,37 @@ impl Simulation {
     }
 
     fn render_cell<G: Graphics>(&self, ctx: Context, graphics_buffer: &mut G, x: u32, y: u32) {
-        let Some(cell) = self.y_velocity.0.0.get(&[x, y]) else {
+        let Some(top) = self.y_velocity.0.0.get(&[x, y]) else {
+            return;
+        };
+        let Some(bottom) = self.y_velocity.0.0.get(&[x, y + 1]) else {
+            return;
+        };
+        let Some(left) = self.y_velocity.0.0.get(&[x, y]) else {
+            return;
+        };
+        let Some(right) = self.y_velocity.0.0.get(&[x + 1, y]) else {
             return;
         };
 
-        rectangle(
-            [
-                if cell.is_sign_positive() { 1.0 } else { 0.0 },
-                if cell.is_sign_positive() { 0.0 } else { 1.0 },
-                0.0,
-                cell.abs() as f32 / 256.0,
-            ],
-            [
-                (x as f64 - VelocityGrid::<Y>::OFFSET[0]) * CELL_SIZE,
-                (y as f64 - VelocityGrid::<Y>::OFFSET[1]) * CELL_SIZE,
-                CELL_SIZE,
-                CELL_SIZE,
-            ],
+        let y_vel = (*top + *bottom) / 2.0;
+        let x_vel = (*left + *right) / 2.0;
+
+        let pos = [(x as f64 + 0.5) * CELL_SIZE, (y as f64 + 0.5) * CELL_SIZE];
+        let pos_delta = [pos[0] + x_vel / 32.0, pos[1] + y_vel / 32.0];
+
+        line::Line {
+            color: BLACK,
+            radius: 2.0,
+            shape: line::Shape::Square,
+        }
+        .draw_arrow(
+            [pos[0], pos[1], pos_delta[0], pos_delta[1]],
+            2.0,
+            &ctx.draw_state,
             ctx.transform,
             graphics_buffer,
-        )
+        );
     }
 
     fn render<G: Graphics>(&self, ctx: Context, graphics_buffer: &mut G) {
