@@ -15,18 +15,18 @@ const NUM_PARTICLE_ITERS: usize = 10;
 const COLLISION_RANDOMNESS: f64 = 0.1;
 
 trait ProblematicallySmall {
-    fn is_problematically_small(self) -> bool;
+    fn is_problematically_small(&self) -> bool;
 }
 
 impl ProblematicallySmall for f32 {
-    fn is_problematically_small(self) -> bool {
-        self.is_subnormal() || self == 0.0
+    fn is_problematically_small(&self) -> bool {
+        self.is_subnormal() || *self == 0.0
     }
 }
 
 impl ProblematicallySmall for f64 {
-    fn is_problematically_small(self) -> bool {
-        self.is_subnormal() || self == 0.0
+    fn is_problematically_small(&self) -> bool {
+        self.is_subnormal() || *self == 0.0
     }
 }
 
@@ -47,7 +47,7 @@ trait Direction<T> {
 impl Direction<f64> for [f64; 2] {
     fn direction(self, other: Self) -> [f64; 2] {
         let distance = self.distance(other);
-        if f64::is_problematically_small(distance * 65536.0) {
+        if (distance * 65536.0).is_problematically_small() {
             return [0.0, 0.0];
         }
 
@@ -450,8 +450,8 @@ impl Simulation {
                     .copied()
                     .unwrap_or(0.0)
                     * is_neighbour_exist[3];
-            let total = is_neighbour_exist.iter().sum();
-            if f64::is_problematically_small(total) {
+            let total = is_neighbour_exist.iter().sum::<f64>();
+            if total.is_problematically_small() {
                 continue;
             }
 
@@ -568,7 +568,7 @@ fn main() {
 
     window.set_lazy(false);
     let mut prev_frame = SystemTime::now();
-    let mut frame_idx = 0;
+    let mut _frame_idx = 0;
     while let Some(event) = window.next() {
         window.draw_2d(&event, |ctx, graphics_buffer, _device| {
             let dt = SystemTime::now()
@@ -591,6 +591,6 @@ fn main() {
             simulation.debug();
         }
 
-        frame_idx += 1;
+        _frame_idx += 1;
     }
 }
