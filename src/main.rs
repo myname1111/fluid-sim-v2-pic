@@ -382,6 +382,7 @@ impl Simulation {
                 .map(|does_exist| if does_exist { 1.0 } else { 0.0 })
                 .collect::<Vec<_>>();
             let neighbour_pos = neighbour_pos.collect::<Vec<_>>();
+            // dbg!(self.y_velocity.0.0.get(&[2, 2]));
 
             let divergence = self
                 .x_velocity
@@ -419,6 +420,10 @@ impl Simulation {
             if f64::is_subnormal(total) {
                 continue;
             }
+
+            if divergence > 0.1 {
+                dbg!(divergence, pos);
+            }
             *self.x_velocity.0.0.entry(neighbour_pos[0]).or_insert(0.0) -= divergence / total;
             *self.y_velocity.0.0.entry(neighbour_pos[1]).or_insert(0.0) -= divergence / total;
             *self.x_velocity.0.0.entry(neighbour_pos[2]).or_insert(0.0) += divergence / total;
@@ -434,42 +439,32 @@ impl Simulation {
     }
 
     fn simulate(&mut self, dt: f64) {
-        self.simulate_particles(dt);
+        // self.simulate_particles(dt);
         self.particle_to_grid_velocity();
-        for _ in 0..3 {
-            self.make_incompressible();
-        }
+        // self.make_incompressible();
         self.grid_to_particle_velocity();
     }
 
     fn render_cell<G: Graphics>(&self, ctx: Context, graphics_buffer: &mut G, x: u32, y: u32) {
-        let Some(top) = self.y_velocity.0.0.get(&[x, y]) else {
-            return;
-        };
-        let Some(bottom) = self.y_velocity.0.0.get(&[x, y + 1]) else {
-            return;
-        };
-        let Some(left) = self.y_velocity.0.0.get(&[x, y]) else {
-            return;
-        };
-        let Some(right) = self.y_velocity.0.0.get(&[x + 1, y]) else {
-            return;
-        };
+        let top = self.y_velocity.0.0.get(&[x, y]).cloned().unwrap_or(0.0);
+        let bottom = self.y_velocity.0.0.get(&[x, y + 1]).cloned().unwrap_or(0.0);
+        let right = self.x_velocity.0.0.get(&[x, y]).cloned().unwrap_or(0.0);
+        let left = self.x_velocity.0.0.get(&[x + 1, y]).cloned().unwrap_or(0.0);
 
-        let y_vel = (*top + *bottom) / 2.0;
-        let x_vel = (*left + *right) / 2.0;
+        let y_vel = (top + bottom) / 2.0;
+        let x_vel = (left + right) / 2.0;
 
         let pos = [(x as f64 + 0.5) * CELL_SIZE, (y as f64 + 0.5) * CELL_SIZE];
-        let pos_delta = [pos[0] + x_vel / 32.0, pos[1] + y_vel / 32.0];
+        let pos_delta = [pos[0] + x_vel, pos[1] + y_vel];
 
         line::Line {
             color: BLACK,
-            radius: 2.0,
+            radius: 0.5,
             shape: line::Shape::Square,
         }
         .draw_arrow(
             [pos[0], pos[1], pos_delta[0], pos_delta[1]],
-            2.0,
+            4.0,
             &ctx.draw_state,
             ctx.transform,
             graphics_buffer,
@@ -504,21 +499,22 @@ fn main() {
         .unwrap();
 
     let mut simulation = Simulation::new([10, 10]);
-    for x in 0..10 {
-        for y in 0..10 {
-            simulation.spawn(Particle {
-                pos: [
-                    100.0 + x as f64 * BASE_PARTICLE_RADIUS,
-                    100.0 + y as f64 * BASE_PARTICLE_RADIUS,
-                ],
-                velocity: [0.0, 0.0],
-            });
-        }
-    }
-    // simulation.spawn(Particle {
-    //     pos: [100.0, 100.0],
-    //     velocity: [0.0, 0.0],
-    // });
+    // simulation.y_velocity.0.0.insert([2, 2], 100.0);
+    // for x in 0..10 {
+    //     for y in 0..10 {
+    //         simulation.spawn(Particle {
+    //             pos: [
+    //                 100.0 + x as f64 * BASE_PARTICLE_RADIUS,
+    //                 100.0 + y as f64 * BASE_PARTICLE_RADIUS,
+    //             ],
+    //             velocity: [0.0, 0.0],
+    //         });
+    //     }
+    // }
+    simulation.spawn(Particle {
+        pos: [100.0, 100.0],
+        velocity: [0.0, 10.0],
+    });
     // simulation.spawn(Particle {
     //     pos: [100.0, 150.0],
     //     velocity: [0.0, 0.0],
@@ -526,12 +522,15 @@ fn main() {
 
     window.set_lazy(false);
     let mut prev_frame = SystemTime::now();
+    let mut frame_idx = 0;
     while let Some(event) = window.next() {
         window.draw_2d(&event, |ctx, graphics_buffer, _device| {
             let dt = SystemTime::now()
                 .duration_since(prev_frame)
                 .expect("Time may have gone backwatds");
-            simulation.simulate(dt.as_secs_f64());
+            if frame_idx % 30 == 0 {
+                simulation.simulate(1.0 / 60.0);
+            }
             graphics_buffer.clear_color([1.0, 1.0, 1.0, 1.0]);
             simulation.render(ctx, graphics_buffer);
             prev_frame = SystemTime::now();
@@ -547,5 +546,7 @@ fn main() {
         {
             simulation.debug();
         }
+
+        frame_idx += 1;
     }
 }
