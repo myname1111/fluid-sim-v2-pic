@@ -14,6 +14,22 @@ const GRAVITY: f64 = 10.0;
 const NUM_PARTICLE_ITERS: usize = 10;
 const COLLISION_RANDOMNESS: f64 = 0.1;
 
+trait ProblematicallySmall {
+    fn is_problematically_small(self) -> bool;
+}
+
+impl ProblematicallySmall for f32 {
+    fn is_problematically_small(self) -> bool {
+        self.is_subnormal() || self == 0.0
+    }
+}
+
+impl ProblematicallySmall for f64 {
+    fn is_problematically_small(self) -> bool {
+        self.is_subnormal() || self == 0.0
+    }
+}
+
 trait Distance<T> {
     fn distance(self, other: Self) -> T;
 }
@@ -31,7 +47,7 @@ trait Direction<T> {
 impl Direction<f64> for [f64; 2] {
     fn direction(self, other: Self) -> [f64; 2] {
         let distance = self.distance(other);
-        if f64::is_subnormal(distance * 65536.0) {
+        if f64::is_problematically_small(distance * 65536.0) {
             return [0.0, 0.0];
         }
 
@@ -142,17 +158,23 @@ impl GridParticleInterface for ParticleGrid {
     const OFFSET: [f64; 2] = [0.0, 0.0];
 }
 
-trait PosDirection {}
+trait PosDirection {
+    const INDEX: usize;
+}
 
 #[derive(Clone, Copy, Default, Debug)]
 struct X;
 
-impl PosDirection for X {}
+impl PosDirection for X {
+    const INDEX: usize = 0;
+}
 
 #[derive(Clone, Copy, Default, Debug)]
 struct Y;
 
-impl PosDirection for Y {}
+impl PosDirection for Y {
+    const INDEX: usize = 0;
+}
 
 #[derive(Default, Debug)]
 struct VelocityGrid<P: PosDirection>(Grid<f64>, PhantomData<P>);
@@ -161,7 +183,7 @@ impl<P: PosDirection> VelocityGrid<P>
 where
     VelocityGrid<P>: GridParticleInterface,
 {
-    fn particle_to_cell(&mut self, velocity: f64, pos: [f64; 2]) {
+    fn particle_to_cell(&mut self, velocity: f64, pos: [f64; 2], weights_grid: &mut Grid<f64>) {
         let grid_pos = Self::get_grid_pos(pos);
         let neighbours = [
             [grid_pos[0], grid_pos[1]],
@@ -172,6 +194,22 @@ where
         let weights = Self::get_weights(pos);
         for (neighbour, weight) in neighbours.iter().zip(weights.iter()) {
             *self.0.0.entry(*neighbour).or_insert(0.0) += *weight * velocity;
+            *weights_grid.0.entry(*neighbour).or_insert(0.0) += *weight
+        }
+    }
+
+    fn paricles_to_grid(&mut self, particles: &[Particle]) {
+        let mut weights_grid = Grid::<f64>::default();
+        for particle in particles {
+            self.particle_to_cell(particle.velocity[P::INDEX], particle.pos, &mut weights_grid);
+        }
+
+        for velocity in self.0.0.iter_mut() {
+            let weight = weights_grid.0.get(velocity.0).cloned().unwrap_or(1.0);
+            if weight.is_problematically_small() {
+                continue;
+            }
+            *velocity.1 /= weight
         }
     }
 
@@ -294,7 +332,7 @@ impl Simulation {
             let mut direction = self.particles[idxs[0]]
                 .pos
                 .direction(self.particles[idxs[1]].pos);
-            if distance.is_subnormal() || distance == 0.0 {
+            if distance.is_problematically_small() {
                 distance = 0.5 * BASE_PARTICLE_RADIUS;
                 direction = random_shift;
             }
@@ -360,12 +398,8 @@ impl Simulation {
         self.x_velocity.0.0.clear();
         self.y_velocity.0.0.clear();
 
-        for particle in &self.particles {
-            self.x_velocity
-                .particle_to_cell(particle.velocity[0], particle.pos);
-            self.y_velocity
-                .particle_to_cell(particle.velocity[1], particle.pos);
-        }
+        self.x_velocity.paricles_to_grid(&self.particles);
+        self.y_velocity.paricles_to_grid(&self.particles);
     }
 
     fn make_incompressible(&mut self) {
@@ -417,7 +451,7 @@ impl Simulation {
                     .unwrap_or(0.0)
                     * is_neighbour_exist[3];
             let total = is_neighbour_exist.iter().sum();
-            if f64::is_subnormal(total) {
+            if f64::is_problematically_small(total) {
                 continue;
             }
 
