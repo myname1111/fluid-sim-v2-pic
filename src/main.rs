@@ -404,7 +404,7 @@ impl Simulation {
 
     fn make_incompressible(&mut self) {
         for pos in self.particle_grid.0.0.keys() {
-            let neighbour_pos = [[0, 0], [0, 0], [1, 0], [0, 1]].iter().map(|delta| {
+            let neighbour_pos = [[0, 1], [1, 0], [1, 1], [1, 1]].iter().map(|delta| {
                 [
                     (pos[0] as i32 + delta[0]) as u32,
                     (pos[1] as i32 + delta[1]) as u32,
@@ -475,7 +475,7 @@ impl Simulation {
     fn simulate(&mut self, dt: f64) {
         // self.simulate_particles(dt);
         self.particle_to_grid_velocity();
-        // self.make_incompressible();
+        self.make_incompressible();
         self.grid_to_particle_velocity();
     }
 
