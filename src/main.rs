@@ -433,8 +433,8 @@ impl Simulation {
 
     fn grid_to_particle_velocity(&mut self) {
         for particle in &mut self.particles {
-            particle.velocity[0] += self.x_velocity.grid_to_particle(particle.pos);
-            particle.velocity[1] += self.y_velocity.grid_to_particle(particle.pos);
+            particle.velocity[0] = self.x_velocity.grid_to_particle(particle.pos);
+            particle.velocity[1] = self.y_velocity.grid_to_particle(particle.pos);
         }
     }
 
@@ -500,7 +500,7 @@ impl Simulation {
     }
 
     fn debug(&self) {
-        dbg!(&self.y_velocity);
+        dbg!(&self.particles.first());
     }
 }
 
