@@ -173,7 +173,7 @@ impl PosDirection for X {
 struct Y;
 
 impl PosDirection for Y {
-    const INDEX: usize = 0;
+    const INDEX: usize = 1;
 }
 
 #[derive(Default, Debug)]
