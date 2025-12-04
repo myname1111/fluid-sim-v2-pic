@@ -455,9 +455,9 @@ impl Simulation {
                 continue;
             }
 
-            if divergence > 0.1 {
-                dbg!(divergence, pos);
-            }
+            // if divergence > 0.1 {
+            //     dbg!(divergence, pos);
+            // }
             *self.x_velocity.0.0.entry(neighbour_pos[0]).or_insert(0.0) -= divergence / total;
             *self.y_velocity.0.0.entry(neighbour_pos[1]).or_insert(0.0) -= divergence / total;
             *self.x_velocity.0.0.entry(neighbour_pos[2]).or_insert(0.0) += divergence / total;
@@ -473,7 +473,7 @@ impl Simulation {
     }
 
     fn simulate(&mut self, dt: f64) {
-        // self.simulate_particles(dt);
+        self.simulate_particles(dt);
         self.particle_to_grid_velocity();
         self.make_incompressible();
         self.grid_to_particle_velocity();
@@ -545,22 +545,22 @@ fn main() {
         .unwrap();
 
     let mut simulation = Simulation::new([10, 10]);
-    // simulation.y_velocity.0.0.insert([2, 2], 100.0);
-    // for x in 0..10 {
-    //     for y in 0..10 {
-    //         simulation.spawn(Particle {
-    //             pos: [
-    //                 100.0 + x as f64 * BASE_PARTICLE_RADIUS,
-    //                 100.0 + y as f64 * BASE_PARTICLE_RADIUS,
-    //             ],
-    //             velocity: [0.0, 0.0],
-    //         });
-    //     }
-    // }
-    simulation.spawn(Particle {
-        pos: [100.0, 100.0],
-        velocity: [0.0, 10.0],
-    });
+    simulation.y_velocity.0.0.insert([2, 2], 100.0);
+    for x in 0..10 {
+        for y in 0..10 {
+            simulation.spawn(Particle {
+                pos: [
+                    100.0 + x as f64 * BASE_PARTICLE_RADIUS,
+                    100.0 + y as f64 * BASE_PARTICLE_RADIUS,
+                ],
+                velocity: [0.0, 0.0],
+            });
+        }
+    }
+    // simulation.spawn(Particle {
+    //     pos: [100.0, 100.0],
+    //     velocity: [0.0, 10.0],
+    // });
     // simulation.spawn(Particle {
     //     pos: [100.0, 150.0],
     //     velocity: [0.0, 0.0],
@@ -574,9 +574,7 @@ fn main() {
             let dt = SystemTime::now()
                 .duration_since(prev_frame)
                 .expect("Time may have gone backwatds");
-            if frame_idx % 30 == 0 {
-                simulation.simulate(1.0 / 60.0);
-            }
+            simulation.simulate(dt.as_secs_f64());
             graphics_buffer.clear_color([1.0, 1.0, 1.0, 1.0]);
             simulation.render(ctx, graphics_buffer);
             prev_frame = SystemTime::now();
