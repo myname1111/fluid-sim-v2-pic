@@ -13,6 +13,8 @@ const PARTICLE_COLOR: [f32; 4] = [0.0, 0.0, 1.0, 1.0];
 const GRAVITY: f64 = 10.0;
 const NUM_PARTICLE_ITERS: usize = 10;
 const COLLISION_RANDOMNESS: f64 = 0.1;
+const DIVERGENCE_SOLVER_ITERS: usize = 20;
+const OVERRELAXATION: f64 = 1.9;
 
 trait ProblematicallySmall {
     fn is_problematically_small(&self) -> bool;
@@ -450,6 +452,7 @@ impl Simulation {
                     .copied()
                     .unwrap_or(0.0)
                     * is_neighbour_exist[3];
+            let divergence = divergence * OVERRELAXATION;
             let total = is_neighbour_exist.iter().sum::<f64>();
             if total.is_problematically_small() {
                 continue;
@@ -475,7 +478,9 @@ impl Simulation {
     fn simulate(&mut self, dt: f64) {
         self.simulate_particles(dt);
         self.particle_to_grid_velocity();
-        self.make_incompressible();
+        for _ in 0..DIVERGENCE_SOLVER_ITERS {
+            self.make_incompressible();
+        }
         self.grid_to_particle_velocity();
     }
 
@@ -544,7 +549,7 @@ fn main() {
         .build()
         .unwrap();
 
-    let mut simulation = Simulation::new([10, 10]);
+    let mut simulation = Simulation::new([50, 50]);
     simulation.y_velocity.0.0.insert([2, 2], 100.0);
     for x in 0..10 {
         for y in 0..10 {
