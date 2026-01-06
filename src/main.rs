@@ -8,13 +8,14 @@ use piston::WindowSettings;
 use piston_window::{color::BLACK, ellipse::circle, *};
 
 const BASE_PARTICLE_RADIUS: f64 = 10.0;
-const CELL_SIZE: f64 = BASE_PARTICLE_RADIUS * 2.0;
+const CELL_SIZE: f64 = BASE_PARTICLE_RADIUS * 5.0;
 const PARTICLE_COLOR: [f32; 4] = [0.0, 0.0, 1.0, 1.0];
-const GRAVITY: f64 = 10.0;
+const GRAVITY: f64 = 0.0;
 const NUM_PARTICLE_ITERS: usize = 10;
 const COLLISION_RANDOMNESS: f64 = 0.1;
 const DIVERGENCE_SOLVER_ITERS: usize = 20;
 const OVERRELAXATION: f64 = 1.9;
+const MIN: f64 = 0.04;
 
 trait ProblematicallySmall {
     fn is_problematically_small(&self) -> bool;
@@ -115,7 +116,7 @@ trait GridParticleInterface {
         [pos[0] - grid_pos[0], pos[1] - grid_pos[1]]
     }
     fn get_weights(pos: [f64; 2]) -> [f64; 4] {
-        let offset = Self::offset(pos);
+        let offset = Self::offset(pos).map(|pos| pos.clamp(MIN, 1.0 - MIN));
 
         [
             (1.0 - offset[0]) * (1.0 - offset[1]),
@@ -183,9 +184,15 @@ struct VelocityGrid<P: PosDirection>(Grid<f64>, PhantomData<P>);
 
 impl<P: PosDirection> VelocityGrid<P>
 where
-    VelocityGrid<P>: GridParticleInterface,
+    VelocityGrid<P>: GridParticleInterface + DefinedPositionsRetrivable,
 {
-    fn particle_to_cell(&mut self, velocity: f64, pos: [f64; 2], weights_grid: &mut Grid<f64>) {
+    fn particle_to_cell(
+        &mut self,
+        velocity: f64,
+        pos: [f64; 2],
+        weights_grid: &mut Grid<f64>,
+        particle_grid: &ParticleGrid,
+    ) {
         let grid_pos = Self::get_grid_pos(pos);
         let neighbours = [
             [grid_pos[0], grid_pos[1]],
@@ -195,15 +202,24 @@ where
         ];
         let weights = Self::get_weights(pos);
         for (neighbour, weight) in neighbours.iter().zip(weights.iter()) {
+            if !Self::is_position_defined(neighbour, particle_grid) {
+                continue;
+            }
+
             *self.0.0.entry(*neighbour).or_insert(0.0) += *weight * velocity;
             *weights_grid.0.entry(*neighbour).or_insert(0.0) += *weight
         }
     }
 
-    fn paricles_to_grid(&mut self, particles: &[Particle]) {
+    fn paricles_to_grid(&mut self, particles: &[Particle], grid: &ParticleGrid) {
         let mut weights_grid = Grid::<f64>::default();
         for particle in particles {
-            self.particle_to_cell(particle.velocity[P::INDEX], particle.pos, &mut weights_grid);
+            self.particle_to_cell(
+                particle.velocity[P::INDEX],
+                particle.pos,
+                &mut weights_grid,
+                grid,
+            );
         }
 
         for velocity in self.0.0.iter_mut() {
@@ -230,7 +246,22 @@ where
         for (neighbour, weight) in neighbours.iter().zip(weights.iter()) {
             total += self.0.0.get(neighbour).cloned().unwrap_or(0.0) * *weight;
         }
-        total
+        total / weights.iter().sum::<f64>()
+    }
+
+    fn is_position_defined(vel_pos: &[u32; 2], particle_grid: &ParticleGrid) -> bool {
+        let positions_to_check_for = Self::defined_positions(vel_pos);
+        let mut out = true;
+        for pos in positions_to_check_for {
+            let is_air = particle_grid
+                .0
+                .0
+                .get(&pos)
+                .map(|cell| cell.is_empty())
+                .unwrap_or(false);
+            out &= !is_air
+        }
+        out
     }
 }
 
@@ -240,6 +271,22 @@ impl GridParticleInterface for VelocityGrid<X> {
 
 impl GridParticleInterface for VelocityGrid<Y> {
     const OFFSET: [f64; 2] = [0.5, 0.0];
+}
+
+trait DefinedPositionsRetrivable {
+    fn defined_positions(vel_pos: &[u32; 2]) -> [[u32; 2]; 2];
+}
+
+impl DefinedPositionsRetrivable for VelocityGrid<X> {
+    fn defined_positions(vel_pos: &[u32; 2]) -> [[u32; 2]; 2] {
+        [*vel_pos, [vel_pos[0] - 1, vel_pos[1]]]
+    }
+}
+
+impl DefinedPositionsRetrivable for VelocityGrid<Y> {
+    fn defined_positions(vel_pos: &[u32; 2]) -> [[u32; 2]; 2] {
+        [*vel_pos, [vel_pos[0], vel_pos[1] - 1]]
+    }
 }
 
 struct Simulation {
@@ -400,8 +447,10 @@ impl Simulation {
         self.x_velocity.0.0.clear();
         self.y_velocity.0.0.clear();
 
-        self.x_velocity.paricles_to_grid(&self.particles);
-        self.y_velocity.paricles_to_grid(&self.particles);
+        self.x_velocity
+            .paricles_to_grid(&self.particles, &self.particle_grid);
+        self.y_velocity
+            .paricles_to_grid(&self.particles, &self.particle_grid);
     }
 
     fn make_incompressible(&mut self) {
@@ -540,6 +589,7 @@ impl Simulation {
 
     fn debug(&self) {
         dbg!(&self.particles.first());
+        // dbg!(&self.x_velocity);
     }
 }
 
@@ -551,25 +601,25 @@ fn main() {
 
     let mut simulation = Simulation::new([50, 50]);
     simulation.y_velocity.0.0.insert([2, 2], 100.0);
-    for x in 0..10 {
-        for y in 0..10 {
-            simulation.spawn(Particle {
-                pos: [
-                    100.0 + x as f64 * BASE_PARTICLE_RADIUS,
-                    100.0 + y as f64 * BASE_PARTICLE_RADIUS,
-                ],
-                velocity: [0.0, 0.0],
-            });
-        }
-    }
-    // simulation.spawn(Particle {
-    //     pos: [100.0, 100.0],
-    //     velocity: [0.0, 10.0],
-    // });
-    // simulation.spawn(Particle {
-    //     pos: [100.0, 150.0],
-    //     velocity: [0.0, 0.0],
-    // });
+    // for x in 0..10 {
+    //     for y in 0..10 {
+    //         simulation.spawn(Particle {
+    //             pos: [
+    //                 100.0 + x as f64 * BASE_PARTICLE_RADIUS,
+    //                 100.0 + y as f64 * BASE_PARTICLE_RADIUS,
+    //             ],
+    //             velocity: [0.0, 0.0],
+    //         });
+    //     }
+    // }
+    simulation.spawn(Particle {
+        pos: [100.0, 100.0],
+        velocity: [100.0, 10.0],
+    });
+    simulation.spawn(Particle {
+        pos: [120.0, 100.0],
+        velocity: [0.0, 0.0],
+    });
 
     window.set_lazy(false);
     let mut prev_frame = SystemTime::now();
@@ -579,7 +629,7 @@ fn main() {
             let dt = SystemTime::now()
                 .duration_since(prev_frame)
                 .expect("Time may have gone backwatds");
-            simulation.simulate(dt.as_secs_f64());
+            simulation.simulate(dt.as_secs_f64() / 16.0);
             graphics_buffer.clear_color([1.0, 1.0, 1.0, 1.0]);
             simulation.render(ctx, graphics_buffer);
             prev_frame = SystemTime::now();
