@@ -589,11 +589,11 @@ impl Simulation {
                 graphics_buffer,
             );
         }
-        for x in 0..=self.size[0] {
-            for y in 0..=self.size[1] {
-                self.render_cell(ctx, graphics_buffer, x, y)
-            }
-        }
+        // for x in 0..=self.size[0] {
+        //     for y in 0..=self.size[1] {
+        //         self.render_cell(ctx, graphics_buffer, x, y)
+        //     }
+        // }
     }
 
     fn debug(&self) {
@@ -610,21 +610,21 @@ fn main() {
 
     let mut simulation = Simulation::new([50, 50]);
     simulation.y_velocity.0.0.insert([2, 2], 100.0);
-    for x in 0..10 {
-        for y in 0..10 {
-            simulation.spawn(Particle {
-                pos: [
-                    100.0 + x as f64 * BASE_PARTICLE_RADIUS,
-                    100.0 + y as f64 * BASE_PARTICLE_RADIUS,
-                ],
-                velocity: [0.0, 0.0],
-            });
-        }
-    }
-    // simulation.spawn(Particle {
-    //     pos: [100.0, 100.0],
-    //     velocity: [10.0, 100.0],
-    // });
+    // for x in 0..10 {
+    //     for y in 0..10 {
+    //         simulation.spawn(Particle {
+    //             pos: [
+    //                 100.0 + x as f64 * BASE_PARTICLE_RADIUS,
+    //                 100.0 + y as f64 * BASE_PARTICLE_RADIUS,
+    //             ],
+    //             velocity: [0.0, 0.0],
+    //         });
+    //     }
+    // }
+    simulation.spawn(Particle {
+        pos: [100.0, 100.0],
+        velocity: [-30.0, 100.0],
+    });
     // simulation.spawn(Particle {
     //     pos: [120.0, 100.0],
     //     velocity: [0.0, 0.0],
