@@ -284,11 +284,7 @@ trait DefinedPositionsRetrivable {
         if vel_pos[0] == 0 || vel_pos[0] == (size[0] - 1) {
             return true;
         }
-        if vel_pos[1] == 0 || vel_pos[1] == (size[1] - 1) {
-            true
-        } else {
-            false
-        }
+        vel_pos[1] == 0 || vel_pos[1] == (size[1] - 1)
     }
 
     fn defined_positions(vel_pos: &[u32; 2], size: [u32; 2]) -> Option<[[u32; 2]; 2]>;
