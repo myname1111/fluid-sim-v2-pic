@@ -264,11 +264,11 @@ where
 }
 
 impl GridParticleInterface for VelocityGrid<X> {
-    const OFFSET: [f64; 2] = [0.0, 0.5];
+    const OFFSET: [f64; 2] = [0.0, -0.5];
 }
 
 impl GridParticleInterface for VelocityGrid<Y> {
-    const OFFSET: [f64; 2] = [0.5, 0.0];
+    const OFFSET: [f64; 2] = [-0.5, 0.0];
 }
 
 trait DefinedPositionsRetrivable {
