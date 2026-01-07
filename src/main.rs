@@ -10,7 +10,7 @@ use piston_window::{color::BLACK, ellipse::circle, *};
 const BASE_PARTICLE_RADIUS: f64 = 10.0;
 const CELL_SIZE: f64 = BASE_PARTICLE_RADIUS * 5.0;
 const PARTICLE_COLOR: [f32; 4] = [0.0, 0.0, 1.0, 1.0];
-const GRAVITY: f64 = 0.0;
+const GRAVITY: f64 = 9.8;
 const NUM_PARTICLE_ITERS: usize = 10;
 const COLLISION_RANDOMNESS: f64 = 0.1;
 const DIVERGENCE_SOLVER_ITERS: usize = 20;
@@ -192,6 +192,7 @@ where
         pos: [f64; 2],
         weights_grid: &mut Grid<f64>,
         particle_grid: &ParticleGrid,
+        size: [u32; 2],
     ) {
         let grid_pos = Self::get_grid_pos(pos);
         let neighbours = [
@@ -201,7 +202,7 @@ where
             [grid_pos[0] + 1, grid_pos[1] + 1],
         ]
         .into_iter()
-        .filter(|neighbout_pos| Self::is_position_defined(neighbout_pos, particle_grid));
+        .filter(|neighbout_pos| Self::is_position_defined(neighbout_pos, particle_grid, size));
         let weights = Self::get_weights(pos);
         for (neighbour, weight) in neighbours.zip(weights.iter()) {
             *self.0.0.entry(neighbour).or_insert(0.0) += *weight * velocity;
@@ -209,7 +210,7 @@ where
         }
     }
 
-    fn paricles_to_grid(&mut self, particles: &[Particle], grid: &ParticleGrid) {
+    fn paricles_to_grid(&mut self, particles: &[Particle], grid: &ParticleGrid, size: [u32; 2]) {
         let mut weights_grid = Grid::<f64>::default();
         for particle in particles {
             self.particle_to_cell(
@@ -217,6 +218,7 @@ where
                 particle.pos,
                 &mut weights_grid,
                 grid,
+                size,
             );
         }
 
@@ -247,8 +249,14 @@ where
         total / weights.iter().sum::<f64>()
     }
 
-    fn is_position_defined(vel_pos: &[u32; 2], particle_grid: &ParticleGrid) -> bool {
-        let positions_to_check_for = Self::defined_positions(vel_pos);
+    fn is_position_defined(
+        vel_pos: &[u32; 2],
+        particle_grid: &ParticleGrid,
+        size: [u32; 2],
+    ) -> bool {
+        let Some(positions_to_check_for) = Self::defined_positions(vel_pos, size) else {
+            return false;
+        };
         let mut out = true;
         for pos in positions_to_check_for {
             let is_air = particle_grid
@@ -272,18 +280,37 @@ impl GridParticleInterface for VelocityGrid<Y> {
 }
 
 trait DefinedPositionsRetrivable {
-    fn defined_positions(vel_pos: &[u32; 2]) -> [[u32; 2]; 2];
+    fn is_wall(vel_pos: &[u32; 2], size: [u32; 2]) -> bool {
+        if vel_pos[0] == 0 || vel_pos[0] == (size[0] - 1) {
+            return true;
+        }
+        if vel_pos[1] == 0 || vel_pos[1] == (size[1] - 1) {
+            true
+        } else {
+            false
+        }
+    }
+
+    fn defined_positions(vel_pos: &[u32; 2], size: [u32; 2]) -> Option<[[u32; 2]; 2]>;
 }
 
 impl DefinedPositionsRetrivable for VelocityGrid<X> {
-    fn defined_positions(vel_pos: &[u32; 2]) -> [[u32; 2]; 2] {
-        [*vel_pos, [vel_pos[0] - 1, vel_pos[1]]]
+    fn defined_positions(vel_pos: &[u32; 2], size: [u32; 2]) -> Option<[[u32; 2]; 2]> {
+        if Self::is_wall(vel_pos, size) {
+            return None;
+        }
+
+        Some([*vel_pos, [vel_pos[0] - 1, vel_pos[1]]])
     }
 }
 
 impl DefinedPositionsRetrivable for VelocityGrid<Y> {
-    fn defined_positions(vel_pos: &[u32; 2]) -> [[u32; 2]; 2] {
-        [*vel_pos, [vel_pos[0], vel_pos[1] - 1]]
+    fn defined_positions(vel_pos: &[u32; 2], size: [u32; 2]) -> Option<[[u32; 2]; 2]> {
+        if Self::is_wall(vel_pos, size) {
+            return None;
+        }
+
+        Some([*vel_pos, [vel_pos[0], vel_pos[1] - 1]])
     }
 }
 
@@ -446,9 +473,9 @@ impl Simulation {
         self.y_velocity.0.0.clear();
 
         self.x_velocity
-            .paricles_to_grid(&self.particles, &self.particle_grid);
+            .paricles_to_grid(&self.particles, &self.particle_grid, self.size);
         self.y_velocity
-            .paricles_to_grid(&self.particles, &self.particle_grid);
+            .paricles_to_grid(&self.particles, &self.particle_grid, self.size);
     }
 
     fn make_incompressible(&mut self) {
@@ -587,25 +614,25 @@ fn main() {
 
     let mut simulation = Simulation::new([50, 50]);
     simulation.y_velocity.0.0.insert([2, 2], 100.0);
-    // for x in 0..10 {
-    //     for y in 0..10 {
-    //         simulation.spawn(Particle {
-    //             pos: [
-    //                 100.0 + x as f64 * BASE_PARTICLE_RADIUS,
-    //                 100.0 + y as f64 * BASE_PARTICLE_RADIUS,
-    //             ],
-    //             velocity: [0.0, 0.0],
-    //         });
-    //     }
-    // }
-    simulation.spawn(Particle {
-        pos: [100.0, 100.0],
-        velocity: [100.0, 10.0],
-    });
-    simulation.spawn(Particle {
-        pos: [120.0, 100.0],
-        velocity: [0.0, 0.0],
-    });
+    for x in 0..10 {
+        for y in 0..10 {
+            simulation.spawn(Particle {
+                pos: [
+                    100.0 + x as f64 * BASE_PARTICLE_RADIUS,
+                    100.0 + y as f64 * BASE_PARTICLE_RADIUS,
+                ],
+                velocity: [0.0, 0.0],
+            });
+        }
+    }
+    // simulation.spawn(Particle {
+    //     pos: [100.0, 100.0],
+    //     velocity: [10.0, 100.0],
+    // });
+    // simulation.spawn(Particle {
+    //     pos: [120.0, 100.0],
+    //     velocity: [0.0, 0.0],
+    // });
 
     window.set_lazy(false);
     let mut prev_frame = SystemTime::now();
