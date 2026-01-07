@@ -199,15 +199,13 @@ where
             [grid_pos[0] + 1, grid_pos[1]],
             [grid_pos[0], grid_pos[1] + 1],
             [grid_pos[0] + 1, grid_pos[1] + 1],
-        ];
+        ]
+        .into_iter()
+        .filter(|neighbout_pos| Self::is_position_defined(neighbout_pos, particle_grid));
         let weights = Self::get_weights(pos);
-        for (neighbour, weight) in neighbours.iter().zip(weights.iter()) {
-            if !Self::is_position_defined(neighbour, particle_grid) {
-                continue;
-            }
-
-            *self.0.0.entry(*neighbour).or_insert(0.0) += *weight * velocity;
-            *weights_grid.0.entry(*neighbour).or_insert(0.0) += *weight
+        for (neighbour, weight) in neighbours.zip(weights.iter()) {
+            *self.0.0.entry(neighbour).or_insert(0.0) += *weight * velocity;
+            *weights_grid.0.entry(neighbour).or_insert(0.0) += *weight
         }
     }
 
