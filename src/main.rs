@@ -532,22 +532,10 @@ impl Simulation {
     }
 
     fn render_cell<G: Graphics>(&self, ctx: Context, graphics_buffer: &mut G, x: u32, y: u32) {
-        let top = self.y_velocity.0.0.get(&[x + 1, y]).cloned().unwrap_or(0.0);
-        let bottom = self
-            .y_velocity
-            .0
-            .0
-            .get(&[x + 1, y + 1])
-            .cloned()
-            .unwrap_or(0.0);
-        let right = self.x_velocity.0.0.get(&[x, y + 1]).cloned().unwrap_or(0.0);
-        let left = self
-            .x_velocity
-            .0
-            .0
-            .get(&[x + 1, y + 1])
-            .cloned()
-            .unwrap_or(0.0);
+        let top = self.y_velocity.0.0.get(&[x, y]).cloned().unwrap_or(0.0);
+        let bottom = self.y_velocity.0.0.get(&[x, y + 1]).cloned().unwrap_or(0.0);
+        let right = self.x_velocity.0.0.get(&[x, y]).cloned().unwrap_or(0.0);
+        let left = self.x_velocity.0.0.get(&[x + 1, y]).cloned().unwrap_or(0.0);
 
         let y_vel = (top + bottom) / 2.0;
         let x_vel = (left + right) / 2.0;
@@ -627,7 +615,7 @@ fn main() {
             let dt = SystemTime::now()
                 .duration_since(prev_frame)
                 .expect("Time may have gone backwatds");
-            simulation.simulate(dt.as_secs_f64() / 16.0);
+            simulation.simulate(dt.as_secs_f64());
             graphics_buffer.clear_color([1.0, 1.0, 1.0, 1.0]);
             simulation.render(ctx, graphics_buffer);
             prev_frame = SystemTime::now();
