@@ -8,7 +8,7 @@ use piston::WindowSettings;
 use piston_window::{color::BLACK, ellipse::circle, *};
 
 const BASE_PARTICLE_RADIUS: f64 = 10.0;
-const CELL_SIZE: f64 = BASE_PARTICLE_RADIUS * 5.0;
+const CELL_SIZE: f64 = BASE_PARTICLE_RADIUS * 2.0;
 const PARTICLE_COLOR: [f32; 4] = [0.0, 0.0, 1.0, 1.0];
 const GRAVITY: f64 = 9.8;
 const NUM_PARTICLE_ITERS: usize = 10;
