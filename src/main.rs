@@ -463,17 +463,12 @@ impl Simulation {
 
     fn make_incompressible(&mut self) {
         for pos in self.particle_grid.0.0.keys() {
-            let neighbour_pos = [[0, 1], [1, 0], [1, 1], [1, 1]].iter().map(|delta| {
+            let neighbour_pos = [[0, 0], [0, 0], [1, 0], [0, 1]].iter().map(|delta| {
                 [
                     (pos[0] as i32 + delta[0]) as u32,
                     (pos[1] as i32 + delta[1]) as u32,
                 ]
             });
-            let is_neighbour_exist = neighbour_pos
-                .clone()
-                .map(|neighbour_pos| self.particle_grid.0.0.contains_key(&neighbour_pos))
-                .map(|does_exist| if does_exist { 1.0 } else { 0.0 })
-                .collect::<Vec<_>>();
             let neighbour_pos = neighbour_pos.collect::<Vec<_>>();
             // dbg!(self.y_velocity.0.0.get(&[2, 2]));
 
@@ -484,7 +479,6 @@ impl Simulation {
                 .get(&neighbour_pos[0])
                 .copied()
                 .unwrap_or(0.0)
-                * is_neighbour_exist[0]
                 + self
                     .y_velocity
                     .0
@@ -492,7 +486,6 @@ impl Simulation {
                     .get(&neighbour_pos[1])
                     .copied()
                     .unwrap_or(0.0)
-                    * is_neighbour_exist[1]
                 - self
                     .x_velocity
                     .0
@@ -500,17 +493,15 @@ impl Simulation {
                     .get(&neighbour_pos[2])
                     .copied()
                     .unwrap_or(0.0)
-                    * is_neighbour_exist[2]
                 - self
                     .y_velocity
                     .0
                     .0
                     .get(&neighbour_pos[3])
                     .copied()
-                    .unwrap_or(0.0)
-                    * is_neighbour_exist[3];
+                    .unwrap_or(0.0);
             let divergence = divergence * OVERRELAXATION;
-            let total = is_neighbour_exist.iter().sum::<f64>();
+            let total = 4.0;
             if total.is_problematically_small() {
                 continue;
             }
@@ -576,11 +567,11 @@ impl Simulation {
                 graphics_buffer,
             );
         }
-        // for x in 0..=self.size[0] {
-        //     for y in 0..=self.size[1] {
-        //         self.render_cell(ctx, graphics_buffer, x, y)
-        //     }
-        // }
+        for x in 0..=self.size[0] {
+            for y in 0..=self.size[1] {
+                self.render_cell(ctx, graphics_buffer, x, y)
+            }
+        }
     }
 
     fn debug(&self) {
@@ -601,19 +592,19 @@ fn main() {
         for y in 0..10 {
             simulation.spawn(Particle {
                 pos: [
-                    100.0 + x as f64 * BASE_PARTICLE_RADIUS,
-                    100.0 + y as f64 * BASE_PARTICLE_RADIUS,
+                    100.0 + x as f64 * BASE_PARTICLE_RADIUS * 2.0,
+                    100.0 + y as f64 * BASE_PARTICLE_RADIUS * 2.0,
                 ],
-                velocity: [0.0, 0.0],
+                velocity: [0.0, 100.0],
             });
         }
     }
     // simulation.spawn(Particle {
     //     pos: [100.0, 100.0],
-    //     velocity: [-30.0, 100.0],
+    //     velocity: [0.0, 0.0],
     // });
     // simulation.spawn(Particle {
-    //     pos: [120.0, 100.0],
+    //     pos: [100.0, 110.0],
     //     velocity: [0.0, 0.0],
     // });
 
