@@ -155,6 +155,12 @@ impl ParticleGrid {
 
         remove_old
     }
+
+    fn is_wall(size: [u32; 2], pos: [u32; 2]) -> bool {
+        let is_x = pos[0] == size[0] || pos[0] == 0;
+        let is_y = pos[1] == size[1] || pos[1] == 0;
+        is_x || is_y
+    }
 }
 
 impl GridParticleInterface for ParticleGrid {
@@ -469,6 +475,14 @@ impl Simulation {
                     (pos[1] as i32 + delta[1]) as u32,
                 ]
             });
+            let is_wall = neighbour_pos
+                .clone()
+                .map(|pos| ParticleGrid::is_wall(self.size, pos))
+                .collect::<Vec<_>>();
+            let mask = is_wall
+                .iter()
+                .map(|is_wall| if *is_wall { 0.0 } else { 1.0 })
+                .collect::<Vec<_>>();
             let neighbour_pos = neighbour_pos.collect::<Vec<_>>();
             // dbg!(self.y_velocity.0.0.get(&[2, 2]));
 
@@ -479,6 +493,7 @@ impl Simulation {
                 .get(&neighbour_pos[0])
                 .copied()
                 .unwrap_or(0.0)
+                * mask[0]
                 + self
                     .y_velocity
                     .0
@@ -486,6 +501,7 @@ impl Simulation {
                     .get(&neighbour_pos[1])
                     .copied()
                     .unwrap_or(0.0)
+                    * mask[1]
                 - self
                     .x_velocity
                     .0
@@ -493,26 +509,36 @@ impl Simulation {
                     .get(&neighbour_pos[2])
                     .copied()
                     .unwrap_or(0.0)
+                    * mask[2]
                 - self
                     .y_velocity
                     .0
                     .0
                     .get(&neighbour_pos[3])
                     .copied()
-                    .unwrap_or(0.0);
+                    .unwrap_or(0.0)
+                    * mask[3];
             let divergence = divergence * OVERRELAXATION;
-            let total = 4.0;
+            let total = mask.iter().sum::<f64>();
             if total.is_problematically_small() {
                 continue;
             }
 
-            // if divergence > 0.1 {
+            // if total < 4.0 {
             //     dbg!(divergence, pos);
             // }
-            *self.x_velocity.0.0.entry(neighbour_pos[0]).or_insert(0.0) -= divergence / total;
-            *self.y_velocity.0.0.entry(neighbour_pos[1]).or_insert(0.0) -= divergence / total;
-            *self.x_velocity.0.0.entry(neighbour_pos[2]).or_insert(0.0) += divergence / total;
-            *self.y_velocity.0.0.entry(neighbour_pos[3]).or_insert(0.0) += divergence / total;
+            if !is_wall[0] {
+                *self.x_velocity.0.0.entry(neighbour_pos[0]).or_insert(0.0) -= divergence / total;
+            }
+            if !is_wall[1] {
+                *self.y_velocity.0.0.entry(neighbour_pos[1]).or_insert(0.0) -= divergence / total;
+            }
+            if !is_wall[2] {
+                *self.x_velocity.0.0.entry(neighbour_pos[2]).or_insert(0.0) += divergence / total;
+            }
+            if !is_wall[3] {
+                *self.y_velocity.0.0.entry(neighbour_pos[3]).or_insert(0.0) += divergence / total;
+            }
         }
     }
 
@@ -569,7 +595,7 @@ impl Simulation {
         }
         for x in 0..=self.size[0] {
             for y in 0..=self.size[1] {
-                self.render_cell(ctx, graphics_buffer, x, y)
+                // self.render_cell(ctx, graphics_buffer, x, y)
             }
         }
     }
@@ -586,7 +612,7 @@ fn main() {
         .build()
         .unwrap();
 
-    let mut simulation = Simulation::new([50, 50]);
+    let mut simulation = Simulation::new([60, 40]);
     simulation.y_velocity.0.0.insert([2, 2], 100.0);
     for x in 0..10 {
         for y in 0..10 {
@@ -595,7 +621,7 @@ fn main() {
                     100.0 + x as f64 * BASE_PARTICLE_RADIUS * 2.0,
                     100.0 + y as f64 * BASE_PARTICLE_RADIUS * 2.0,
                 ],
-                velocity: [0.0, 100.0],
+                velocity: [100.0, 0.0],
             });
         }
     }
