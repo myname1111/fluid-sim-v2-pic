@@ -94,6 +94,32 @@ impl Particle {
 #[derive(Default, Debug)]
 struct Grid<T>(HashMap<[u32; 2], T>);
 
+impl<T> Grid<T> {
+    fn get(&self, pos: [u32; 2]) -> Option<&T> {
+        self.0.get(&pos)
+    }
+
+    fn get_mut(&mut self, pos: [u32; 2]) -> Option<&mut T> {
+        self.0.get_mut(&pos)
+    }
+
+    fn remove(&mut self, pos: [u32; 2]) -> Option<T> {
+        self.0.remove(&pos)
+    }
+
+    fn insert(&mut self, pos: [u32; 2], value: T) -> Option<T> {
+        self.0.insert(pos, value)
+    }
+
+    fn modify_or_insert(&mut self, pos: [u32; 2], insertion: T) -> &mut T {
+        self.0.entry(pos).or_insert(insertion)
+    }
+
+    fn clear(&mut self) {
+        self.0.clear();
+    }
+}
+
 #[derive(Default, Debug)]
 struct ParticleGrid(Grid<HashSet<usize>>);
 
@@ -136,21 +162,21 @@ impl ParticleGrid {
     ) -> bool {
         let mut remove_old = false;
 
-        if let Some(old_cell) = self.0.0.get_mut(&old) {
+        if let Some(old_cell) = self.0.get_mut(old) {
             old_cell.remove(&particle_idx);
             remove_old = old_cell.is_empty();
         }
 
         if remove_old {
-            self.0.0.remove(&old);
+            self.0.remove(old);
         }
 
-        if let Some(new_cell) = self.0.0.get_mut(&new) {
+        if let Some(new_cell) = self.0.get_mut(new) {
             new_cell.insert(particle_idx);
         } else {
             let mut new_set = HashSet::new();
             new_set.insert(particle_idx);
-            self.0.0.insert(new, new_set);
+            self.0.insert(new, new_set);
         }
 
         remove_old
@@ -210,8 +236,8 @@ where
         .filter(|neighbout_pos| Self::is_position_defined(neighbout_pos, particle_grid));
         let weights = Self::get_weights(pos);
         for (neighbour, weight) in neighbours.zip(weights.iter()) {
-            *self.0.0.entry(neighbour).or_insert(0.0) += *weight * velocity;
-            *weights_grid.0.entry(neighbour).or_insert(0.0) += *weight
+            *self.0.modify_or_insert(neighbour, 0.0) += *weight * velocity;
+            *weights_grid.modify_or_insert(neighbour, 0.0) += *weight;
         }
     }
 
@@ -248,7 +274,7 @@ where
         let mut total = 0.0;
 
         for (neighbour, weight) in neighbours.iter().zip(weights.iter()) {
-            total += self.0.0.get(neighbour).cloned().unwrap_or(0.0) * *weight;
+            total += self.0.get(*neighbour).cloned().unwrap_or(0.0) * *weight;
         }
         total / weights.iter().sum::<f64>()
     }
@@ -261,8 +287,7 @@ where
         for pos in positions_to_check_for {
             let is_air = particle_grid
                 .0
-                .0
-                .get(&pos)
+                .get(pos)
                 .map(|cell| cell.is_empty())
                 .unwrap_or(false);
             out &= !is_air
@@ -326,12 +351,12 @@ impl Simulation {
         self.particles.push(particle);
         let new_index = self.particles.len() - 1;
         let grid_pos = ParticleGrid::get_grid_pos(particle.pos);
-        if let Some(hashset) = self.particle_grid.0.0.get_mut(&grid_pos) {
+        if let Some(hashset) = self.particle_grid.0.get_mut(grid_pos) {
             hashset.insert(new_index);
         } else {
             let mut new_hashset = HashSet::new();
             new_hashset.insert(new_index);
-            self.particle_grid.0.0.insert(grid_pos, new_hashset);
+            self.particle_grid.0.insert(grid_pos, new_hashset);
         }
     }
 
@@ -347,7 +372,7 @@ impl Simulation {
                         (pos[1] as i32 + delta_pos[1]) as u32,
                     ]
                 })
-                .filter_map(|neighbour_pos| self.particle_grid.0.0.get(&neighbour_pos))
+                .filter_map(|neighbour_pos| self.particle_grid.0.get(neighbour_pos))
                 .flat_map(|neighbour| neighbour.iter())
                 .chain(particles.iter());
 
@@ -458,8 +483,8 @@ impl Simulation {
     }
 
     fn particle_to_grid_velocity(&mut self) {
-        self.x_velocity.0.0.clear();
-        self.y_velocity.0.0.clear();
+        self.x_velocity.0.clear();
+        self.y_velocity.0.clear();
 
         self.x_velocity
             .paricles_to_grid(&self.particles, &self.particle_grid);
@@ -489,32 +514,28 @@ impl Simulation {
             let divergence = self
                 .x_velocity
                 .0
-                .0
-                .get(&neighbour_pos[0])
+                .get(neighbour_pos[0])
                 .copied()
                 .unwrap_or(0.0)
                 * mask[0]
                 + self
                     .y_velocity
                     .0
-                    .0
-                    .get(&neighbour_pos[1])
+                    .get(neighbour_pos[1])
                     .copied()
                     .unwrap_or(0.0)
                     * mask[1]
                 - self
                     .x_velocity
                     .0
-                    .0
-                    .get(&neighbour_pos[2])
+                    .get(neighbour_pos[2])
                     .copied()
                     .unwrap_or(0.0)
                     * mask[2]
                 - self
                     .y_velocity
                     .0
-                    .0
-                    .get(&neighbour_pos[3])
+                    .get(neighbour_pos[3])
                     .copied()
                     .unwrap_or(0.0)
                     * mask[3];
@@ -528,16 +549,16 @@ impl Simulation {
             //     dbg!(divergence, pos);
             // }
             if !is_wall[0] {
-                *self.x_velocity.0.0.entry(neighbour_pos[0]).or_insert(0.0) -= divergence / total;
+                *self.x_velocity.0.modify_or_insert(neighbour_pos[0], 0.0) -= divergence / total;
             }
             if !is_wall[1] {
-                *self.y_velocity.0.0.entry(neighbour_pos[1]).or_insert(0.0) -= divergence / total;
+                *self.y_velocity.0.modify_or_insert(neighbour_pos[1], 0.0) -= divergence / total;
             }
             if !is_wall[2] {
-                *self.x_velocity.0.0.entry(neighbour_pos[2]).or_insert(0.0) += divergence / total;
+                *self.x_velocity.0.modify_or_insert(neighbour_pos[2], 0.0) += divergence / total;
             }
             if !is_wall[3] {
-                *self.y_velocity.0.0.entry(neighbour_pos[3]).or_insert(0.0) += divergence / total;
+                *self.y_velocity.0.modify_or_insert(neighbour_pos[3], 0.0) += divergence / total;
             }
         }
     }
@@ -559,10 +580,10 @@ impl Simulation {
     }
 
     fn render_cell<G: Graphics>(&self, ctx: Context, graphics_buffer: &mut G, x: u32, y: u32) {
-        let top = self.y_velocity.0.0.get(&[x, y]).cloned().unwrap_or(0.0);
-        let bottom = self.y_velocity.0.0.get(&[x, y + 1]).cloned().unwrap_or(0.0);
-        let right = self.x_velocity.0.0.get(&[x, y]).cloned().unwrap_or(0.0);
-        let left = self.x_velocity.0.0.get(&[x + 1, y]).cloned().unwrap_or(0.0);
+        let top = self.y_velocity.0.get([x, y]).cloned().unwrap_or(0.0);
+        let bottom = self.y_velocity.0.get([x, y + 1]).cloned().unwrap_or(0.0);
+        let right = self.x_velocity.0.get([x, y]).cloned().unwrap_or(0.0);
+        let left = self.x_velocity.0.get([x + 1, y]).cloned().unwrap_or(0.0);
 
         let y_vel = (top + bottom) / 2.0;
         let x_vel = (left + right) / 2.0;
@@ -613,7 +634,7 @@ fn main() {
         .unwrap();
 
     let mut simulation = Simulation::new([60, 40]);
-    simulation.y_velocity.0.0.insert([2, 2], 100.0);
+    simulation.y_velocity.0.insert([2, 2], 100.0);
     for x in 0..10 {
         for y in 0..10 {
             simulation.spawn(Particle {
