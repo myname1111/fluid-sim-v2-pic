@@ -1,11 +1,7 @@
-use std::{
-    collections::{HashMap, HashSet},
-    marker::PhantomData,
-    time::SystemTime,
-};
+use std::{collections::HashSet, marker::PhantomData, time::SystemTime};
 
 use piston::WindowSettings;
-use piston_window::{color::BLACK, ellipse::circle, *};
+use piston_window::{color::GREEN, ellipse::circle, *};
 
 const BASE_PARTICLE_RADIUS: f64 = 10.0;
 const CELL_SIZE: f64 = BASE_PARTICLE_RADIUS * 2.0;
@@ -95,20 +91,36 @@ impl Particle {
 struct Grid<T>(Vec<Option<T>>, [u32; 2]);
 
 impl<T> Grid<T> {
-    fn pos(&self, index: usize) -> [u32; 2] {
-        [index as u32 / self.1[0], index as u32 % self.1[0]]
+    fn new(size: [u32; 2]) -> Self {
+        let mut items = vec![];
+        for _ in 0..(size[0] * size[1]) {
+            items.push(None);
+        }
+        Self(items, size)
     }
 
-    fn index(&self, pos: [u32; 2]) -> usize {
-        (pos[1] * self.1[0] + pos[0]) as usize
+    fn pos(&self, index: usize) -> [u32; 2] {
+        [index as u32 % self.1[0], index as u32 / self.1[0]]
+    }
+
+    fn index(&self, pos: [u32; 2]) -> Option<usize> {
+        if pos[0] >= self.1[0] {
+            return None;
+        }
+        if pos[1] >= self.1[1] {
+            return None;
+        }
+        Some((pos[1] * self.1[0] + pos[0]) as usize)
     }
 
     fn get(&self, pos: [u32; 2]) -> Option<&T> {
-        self.0.get(self.index(pos)).and_then(|inner| inner.as_ref())
+        self.0
+            .get(self.index(pos)?)
+            .and_then(|inner| inner.as_ref())
     }
 
     fn get_mut(&mut self, pos: [u32; 2]) -> Option<&mut Option<T>> {
-        let index = self.index(pos);
+        let index = self.index(pos)?;
         self.0.get_mut(index)
     }
 
@@ -129,18 +141,17 @@ impl<T> Grid<T> {
     }
 
     fn modify_or_insert(&mut self, pos: [u32; 2], insertion: T) -> Option<&mut T> {
-        if let Some(cell) = self.get_mut(pos) {
-            if cell.is_none() {
-                *cell = Some(insertion)
-            }
-            cell.as_mut()
-        } else {
-            None
+        let cell = self.get_mut(pos)?;
+        if cell.is_none() {
+            *cell = Some(insertion);
         }
+        cell.as_mut()
     }
 
     fn clear(&mut self) {
-        self.0.clear();
+        for cell in &mut self.0 {
+            *cell = None;
+        }
     }
 }
 
@@ -178,6 +189,10 @@ trait GridParticleInterface {
 }
 
 impl ParticleGrid {
+    fn new(size: [u32; 2]) -> Self {
+        Self(Grid::<_>::new(size))
+    }
+
     fn move_particle_grid_pos(
         &mut self,
         old: [u32; 2],
@@ -207,8 +222,8 @@ impl ParticleGrid {
     }
 
     fn is_wall(size: [u32; 2], pos: [u32; 2]) -> bool {
-        let is_x = pos[0] == size[0] || pos[0] == 0;
-        let is_y = pos[1] == size[1] || pos[1] == 0;
+        let is_x = pos[0] == (size[0] - 1) || pos[0] == 0;
+        let is_y = pos[1] == (size[1] - 1) || pos[1] == 0;
         is_x || is_y
     }
 }
@@ -238,6 +253,12 @@ impl PosDirection for Y {
 #[derive(Default, Debug)]
 struct VelocityGrid<P: PosDirection>(Grid<f64>, PhantomData<P>);
 
+impl<P: PosDirection> VelocityGrid<P> {
+    fn new(size: [u32; 2]) -> Self {
+        Self(Grid::<f64>::new(size), PhantomData)
+    }
+}
+
 impl<P: PosDirection> VelocityGrid<P>
 where
     VelocityGrid<P>: GridParticleInterface + DefinedPositionsRetrivable,
@@ -250,6 +271,7 @@ where
         particle_grid: &ParticleGrid,
     ) {
         let grid_pos = Self::get_grid_pos(pos);
+        // dbg!(pos, grid_pos);
         let neighbours = [
             [grid_pos[0], grid_pos[1]],
             [grid_pos[0] + 1, grid_pos[1]],
@@ -257,16 +279,23 @@ where
             [grid_pos[0] + 1, grid_pos[1] + 1],
         ]
         .into_iter()
-        .filter(|neighbout_pos| Self::is_position_defined(neighbout_pos, particle_grid));
+        .filter(|neighbour_pos| Self::is_position_defined(neighbour_pos, particle_grid));
         let weights = Self::get_weights(pos);
         for (neighbour, weight) in neighbours.zip(weights.iter()) {
-            *self.0.modify_or_insert(neighbour, 0.0).unwrap() += *weight * velocity;
-            *weights_grid.modify_or_insert(neighbour, 0.0).unwrap() += *weight;
+            let Some(vel) = self.0.modify_or_insert(neighbour, 0.0) else {
+                // dbg!(neighbour);
+                continue;
+            };
+            let Some(weight_sum) = weights_grid.modify_or_insert(neighbour, 0.0) else {
+                continue;
+            };
+            *vel += weight * velocity;
+            *weight_sum += weight;
         }
     }
 
     fn paricles_to_grid(&mut self, particles: &[Particle], grid: &ParticleGrid) {
-        let mut weights_grid = Grid::<f64>::default();
+        let mut weights_grid = Grid::<f64>::new(self.0.1);
         for particle in particles {
             self.particle_to_cell(
                 particle.velocity[P::INDEX],
@@ -276,6 +305,7 @@ where
             );
         }
 
+        // dbg!(self.0.1);
         for (idx, velocity) in self.0.0.iter_mut().enumerate() {
             let Some(velocity) = velocity else {
                 continue;
@@ -284,6 +314,7 @@ where
             if weight.is_problematically_small() {
                 continue;
             }
+            // dbg!(weight, idx);
             *velocity /= weight
         }
     }
@@ -299,11 +330,16 @@ where
 
         let weights = Self::get_weights(particle_pos);
         let mut total = 0.0;
+        let mut total_weights = 0.0;
 
-        for (neighbour, weight) in neighbours.iter().zip(weights.iter()) {
-            total += self.0.get(*neighbour).cloned().unwrap_or(0.0) * *weight;
+        for (neighbour_pos, weight) in neighbours.iter().zip(weights.iter()) {
+            let Some(neighbour) = self.0.get(*neighbour_pos) else {
+                continue;
+            };
+            total += *neighbour * *weight;
+            total_weights += *weight;
         }
-        total / weights.iter().sum::<f64>()
+        total / total_weights
     }
 
     fn is_position_defined(vel_pos: &[u32; 2], particle_grid: &ParticleGrid) -> bool {
@@ -367,9 +403,9 @@ impl Simulation {
     fn new(size: [u32; 2]) -> Simulation {
         Simulation {
             particles: vec![],
-            x_velocity: VelocityGrid::<X>::default(),
-            y_velocity: VelocityGrid::<Y>::default(),
-            particle_grid: ParticleGrid::default(),
+            x_velocity: VelocityGrid::<X>::new([size[0] + 1, size[1]]),
+            y_velocity: VelocityGrid::<Y>::new([size[0], size[1] + 1]),
+            particle_grid: ParticleGrid::new(size),
             size,
         }
     }
@@ -583,33 +619,20 @@ impl Simulation {
             // if total < 4.0 {
             //     dbg!(divergence, pos);
             // }
-            if !is_wall[0] {
-                *self
-                    .x_velocity
-                    .0
-                    .modify_or_insert(neighbour_pos[0], 0.0)
-                    .unwrap() -= divergence / total;
-            }
-            if !is_wall[1] {
-                *self
-                    .y_velocity
-                    .0
-                    .modify_or_insert(neighbour_pos[1], 0.0)
-                    .unwrap() -= divergence / total;
-            }
-            if !is_wall[2] {
-                *self
-                    .x_velocity
-                    .0
-                    .modify_or_insert(neighbour_pos[2], 0.0)
-                    .unwrap() += divergence / total;
-            }
-            if !is_wall[3] {
-                *self
-                    .y_velocity
-                    .0
-                    .modify_or_insert(neighbour_pos[3], 0.0)
-                    .unwrap() += divergence / total;
+            for (idx, pos) in neighbour_pos.iter().enumerate() {
+                if is_wall[idx] {
+                    continue;
+                }
+                let vel_grid = if idx % 2 == 0 {
+                    &mut self.x_velocity.0
+                } else {
+                    &mut self.y_velocity.0
+                };
+                let sign = ((idx as i32 / 2) * 2 - 1) as f64;
+                let Some(vel) = vel_grid.modify_or_insert(*pos, 0.0) else {
+                    continue;
+                };
+                *vel += sign * divergence / total
             }
         }
     }
@@ -627,6 +650,7 @@ impl Simulation {
         for _ in 0..DIVERGENCE_SOLVER_ITERS {
             self.make_incompressible();
         }
+        // dbg!(&self.particles.first());
         self.grid_to_particle_velocity();
     }
 
@@ -639,11 +663,11 @@ impl Simulation {
         let y_vel = (top + bottom) / 2.0;
         let x_vel = (left + right) / 2.0;
 
-        let pos = [(x as f64 + 0.5) * CELL_SIZE, (y as f64 + 0.5) * CELL_SIZE];
-        let pos_delta = [pos[0] + x_vel, pos[1] + y_vel];
+        let pos = [(x as f64) * CELL_SIZE, (y as f64) * CELL_SIZE];
+        let pos_delta = [pos[0] + x_vel / 5.0, pos[1] + y_vel / 5.0];
 
         line::Line {
-            color: BLACK,
+            color: GREEN,
             radius: 0.5,
             shape: line::Shape::Square,
         }
@@ -665,11 +689,11 @@ impl Simulation {
                 graphics_buffer,
             );
         }
-        for x in 0..=self.size[0] {
-            for y in 0..=self.size[1] {
-                // self.render_cell(ctx, graphics_buffer, x, y)
-            }
-        }
+        // for x in 0..self.size[0] {
+        //     for y in 0..self.size[1] {
+        //         self.render_cell(ctx, graphics_buffer, x, y)
+        //     }
+        // }
     }
 
     fn debug(&self) {
@@ -685,7 +709,7 @@ fn main() {
         .unwrap();
 
     let mut simulation = Simulation::new([60, 40]);
-    simulation.y_velocity.0.insert([2, 2], 100.0);
+    // simulation.y_velocity.0.insert([2, 2], 100.0);
     for x in 0..10 {
         for y in 0..10 {
             simulation.spawn(Particle {
@@ -698,12 +722,16 @@ fn main() {
         }
     }
     // simulation.spawn(Particle {
-    //     pos: [100.0, 100.0],
-    //     velocity: [0.0, 0.0],
+    //     pos: [80.0, 780.0],
+    //     velocity: [0.0, 100.0],
     // });
     // simulation.spawn(Particle {
-    //     pos: [100.0, 110.0],
-    //     velocity: [0.0, 0.0],
+    //     pos: [80.0, 80.0],
+    //     velocity: [0.0, 100.0],
+    // });
+    // simulation.spawn(Particle {
+    //     pos: [130.0, 800.0],
+    //     velocity: [100.0, 0.0],
     // });
 
     window.set_lazy(false);
