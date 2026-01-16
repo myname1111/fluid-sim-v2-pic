@@ -440,7 +440,7 @@ impl Simulation {
                     ]
                 })
                 .filter_map(|neighbour_pos| self.particle_grid.0.get(neighbour_pos))
-                .flat_map(|neighbour| neighbour.iter())
+                .flatten()
                 .chain(particles.iter());
 
             for particle_idx in particles {
@@ -736,12 +736,14 @@ fn main() {
 
     window.set_lazy(false);
     let mut prev_frame = SystemTime::now();
-    let mut _frame_idx = 0;
+    let mut frame_idx = 0;
+    let mut total_time = 0.0;
     while let Some(event) = window.next() {
         window.draw_2d(&event, |ctx, graphics_buffer, _device| {
             let dt = SystemTime::now()
                 .duration_since(prev_frame)
                 .expect("Time may have gone backwatds");
+            total_time += dt.as_secs_f64();
             simulation.simulate(dt.as_secs_f64());
             graphics_buffer.clear_color([1.0, 1.0, 1.0, 1.0]);
             simulation.render(ctx, graphics_buffer);
@@ -759,6 +761,8 @@ fn main() {
             simulation.debug();
         }
 
-        _frame_idx += 1;
+        frame_idx += 1;
     }
+
+    println!("Average frame rate {}", frame_idx as f64 / total_time)
 }
