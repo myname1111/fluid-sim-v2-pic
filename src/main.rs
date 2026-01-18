@@ -77,11 +77,9 @@ impl Particle {
         self.pos[1] = self.pos[1].clamp(0.0, size[1] - 0.01);
     }
 
-    fn simulate(&mut self, dt: f64, size: [f64; 2]) {
+    fn simulate(&mut self, dt: f64) {
         self.pos[0] += self.velocity[0] * dt;
         self.pos[1] += self.velocity[1] * dt;
-
-        self.velocity[1] += GRAVITY * dt;
     }
 }
 
@@ -534,7 +532,7 @@ impl Simulation {
         for (idx, particle) in self.particles.iter_mut().enumerate() {
             let old_grid_pos = ParticleGrid::get_grid_pos(particle.pos);
 
-            particle.simulate(dt, size);
+            particle.simulate(dt);
             particle.push_out_of_border(size);
 
             let new_grid_pos = ParticleGrid::get_grid_pos(particle.pos);
@@ -647,9 +645,19 @@ impl Simulation {
         }
     }
 
+    fn add_forces(&mut self, dt: f64) {
+        for vel in &mut self.y_velocity.0.0 {
+            let Some(vel) = vel else {
+                continue;
+            };
+            *vel += GRAVITY * dt
+        }
+    }
+
     fn simulate(&mut self, dt: f64) {
         self.simulate_particles(dt);
         self.particle_to_grid_velocity();
+        self.add_forces(dt);
         for _ in 0..DIVERGENCE_SOLVER_ITERS {
             self.make_incompressible();
         }
@@ -691,11 +699,11 @@ impl Simulation {
                 graphics_buffer,
             );
         }
-        // for x in 0..self.size[0] {
-        //     for y in 0..self.size[1] {
-        //         self.render_cell(ctx, graphics_buffer, x, y)
-        //     }
-        // }
+        for x in 0..self.size[0] {
+            for y in 0..self.size[1] {
+                self.render_cell(ctx, graphics_buffer, x, y)
+            }
+        }
     }
 
     fn debug(&self) {
@@ -723,11 +731,11 @@ fn main() {
         }
     }
     // simulation.spawn(Particle {
-    //     pos: [80.0, 100.0],
+    //     pos: [80.0, 760.0],
     //     velocity: [0.0, 100.0],
     // });
     // simulation.spawn(Particle {
-    //     pos: [80.0, 00.0],
+    //     pos: [100.0, 780.0],
     //     velocity: [0.0, 0.0],
     // });
     // simulation.spawn(Particle {
