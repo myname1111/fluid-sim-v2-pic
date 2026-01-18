@@ -590,6 +590,23 @@ impl Simulation {
             .paricles_to_grid(&self.particles, &self.particle_grid);
     }
 
+    fn add_forces(&mut self, dt: f64) {
+        for vel in &mut self.y_velocity.0.0 {
+            let Some(vel) = vel else {
+                continue;
+            };
+            *vel += GRAVITY * dt
+        }
+    }
+
+    fn update_particle_density(&mut self) {
+        self.particle_density_grid.0.clear();
+
+        for particle in &self.particles {
+            self.particle_density_grid.particle_to_cell(particle.pos);
+        }
+    }
+
     fn make_incompressible(&mut self) {
         for (idx, particles) in self.particle_grid.0.0.iter().enumerate() {
             if particles.is_none() {
@@ -675,17 +692,9 @@ impl Simulation {
         }
     }
 
-    fn add_forces(&mut self, dt: f64) {
-        for vel in &mut self.y_velocity.0.0 {
-            let Some(vel) = vel else {
-                continue;
-            };
-            *vel += GRAVITY * dt
-        }
-    }
-
     fn simulate(&mut self, dt: f64) {
         self.simulate_particles(dt);
+        self.update_particle_density();
         self.particle_to_grid_velocity();
         self.add_forces(dt);
         for _ in 0..DIVERGENCE_SOLVER_ITERS {
