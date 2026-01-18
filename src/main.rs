@@ -267,7 +267,6 @@ where
         particle_grid: &ParticleGrid,
     ) {
         let grid_pos = Self::get_grid_pos(pos);
-        // dbg!(pos, grid_pos);
         let neighbours = [
             [grid_pos[0], grid_pos[1]],
             [grid_pos[0] + 1, grid_pos[1]],
@@ -387,11 +386,41 @@ impl DefinedPositionsRetrivable for VelocityGrid<Y> {
     }
 }
 
+struct ParticleDensityGrid(Grid<f64>);
+
+impl ParticleDensityGrid {
+    fn new(size: [u32; 2]) -> Self {
+        Self(Grid::new(size))
+    }
+
+    fn particle_to_cell(&mut self, pos: [f64; 2]) {
+        let grid_pos = Self::get_grid_pos(pos);
+        let neighbours = [
+            [grid_pos[0], grid_pos[1]],
+            [grid_pos[0] + 1, grid_pos[1]],
+            [grid_pos[0], grid_pos[1] + 1],
+            [grid_pos[0] + 1, grid_pos[1] + 1],
+        ];
+        let weights = Self::get_weights(pos);
+        for (neighbour, weight) in neighbours.iter().zip(weights) {
+            let Some(density) = self.0.modify_or_insert(grid_pos, 0.0) else {
+                continue;
+            };
+            *density += weight;
+        }
+    }
+}
+
+impl GridParticleInterface for ParticleDensityGrid {
+    const OFFSET: [f64; 2] = [-0.5, -0.5];
+}
+
 struct Simulation {
     particles: Vec<Particle>,
     x_velocity: VelocityGrid<X>,
     y_velocity: VelocityGrid<Y>,
     particle_grid: ParticleGrid,
+    particle_density_grid: ParticleDensityGrid,
     size: [u32; 2],
 }
 
@@ -402,6 +431,7 @@ impl Simulation {
             x_velocity: VelocityGrid::<X>::new([size[0] + 1, size[1]]),
             y_velocity: VelocityGrid::<Y>::new([size[0], size[1] + 1]),
             particle_grid: ParticleGrid::new(size),
+            particle_density_grid: ParticleDensityGrid::new(size),
             size,
         }
     }
@@ -699,11 +729,11 @@ impl Simulation {
                 graphics_buffer,
             );
         }
-        for x in 0..self.size[0] {
-            for y in 0..self.size[1] {
-                self.render_cell(ctx, graphics_buffer, x, y)
-            }
-        }
+        // for x in 0..self.size[0] {
+        //     for y in 0..self.size[1] {
+        //         self.render_cell(ctx, graphics_buffer, x, y)
+        //     }
+        // }
     }
 
     fn debug(&self) {
