@@ -73,8 +73,8 @@ impl Particle {
             self.velocity[1] = 0.0
         }
 
-        self.pos[0] = self.pos[0].clamp(0.0, size[0]);
-        self.pos[1] = self.pos[1].clamp(0.0, size[1]);
+        self.pos[0] = self.pos[0].clamp(0.0, size[0] - 0.01);
+        self.pos[1] = self.pos[1].clamp(0.0, size[1] - 0.01);
     }
 
     fn simulate(&mut self, dt: f64, size: [f64; 2]) {
@@ -82,8 +82,6 @@ impl Particle {
         self.pos[1] += self.velocity[1] * dt;
 
         self.velocity[1] += GRAVITY * dt;
-
-        self.push_out_of_border(size);
     }
 }
 
@@ -431,14 +429,15 @@ impl Simulation {
                 continue;
             };
             let pos = self.particle_grid.0.pos(idx);
-            let other_particles = (-1i32..=1i32)
+            let other_pos = (-1i32..=1i32)
                 .flat_map(|x| (-1i32..=1i32).map(move |y| [x, y]))
                 .map(|delta_pos| {
                     [
                         (pos[0] as i32 + delta_pos[0]) as u32,
                         (pos[1] as i32 + delta_pos[1]) as u32,
                     ]
-                })
+                });
+            let other_particles = other_pos
                 .filter_map(|neighbour_pos| self.particle_grid.0.get(neighbour_pos))
                 .flatten()
                 .chain(particles.iter());
@@ -473,7 +472,7 @@ impl Simulation {
         collisions
     }
 
-    fn self_collide_particles(&mut self) {
+    fn self_collide_particles(&mut self, size: [f64; 2]) {
         let collisions = self.get_particle_collision();
 
         for idxs in collisions {
@@ -506,6 +505,9 @@ impl Simulation {
             self.particles[idxs[0]].pos[1] += shift * direction[1];
             self.particles[idxs[1]].pos[1] -= shift * direction[1];
 
+            self.particles[idxs[0]].push_out_of_border(size);
+            self.particles[idxs[1]].push_out_of_border(size);
+
             let new_grid_pos = idxs.map(|idx| ParticleGrid::get_grid_pos(self.particles[idx].pos));
 
             idxs.iter()
@@ -525,14 +527,15 @@ impl Simulation {
     }
 
     fn simulate_particles(&mut self, dt: f64) {
+        let size = [
+            self.size[0] as f64 * CELL_SIZE,
+            self.size[1] as f64 * CELL_SIZE,
+        ];
         for (idx, particle) in self.particles.iter_mut().enumerate() {
             let old_grid_pos = ParticleGrid::get_grid_pos(particle.pos);
 
-            let size = [
-                self.size[0] as f64 * CELL_SIZE,
-                self.size[1] as f64 * CELL_SIZE,
-            ];
             particle.simulate(dt, size);
+            particle.push_out_of_border(size);
 
             let new_grid_pos = ParticleGrid::get_grid_pos(particle.pos);
 
@@ -545,7 +548,7 @@ impl Simulation {
         }
 
         for _ in 0..NUM_PARTICLE_ITERS {
-            self.self_collide_particles();
+            self.self_collide_particles(size);
         }
     }
 
@@ -650,7 +653,6 @@ impl Simulation {
         for _ in 0..DIVERGENCE_SOLVER_ITERS {
             self.make_incompressible();
         }
-        // dbg!(&self.particles.first());
         self.grid_to_particle_velocity();
     }
 
@@ -663,7 +665,7 @@ impl Simulation {
         let y_vel = (top + bottom) / 2.0;
         let x_vel = (left + right) / 2.0;
 
-        let pos = [(x as f64) * CELL_SIZE, (y as f64) * CELL_SIZE];
+        let pos = [(x as f64 + 0.5) * CELL_SIZE, (y as f64 + 0.5) * CELL_SIZE];
         let pos_delta = [pos[0] + x_vel / 5.0, pos[1] + y_vel / 5.0];
 
         line::Line {
@@ -697,7 +699,7 @@ impl Simulation {
     }
 
     fn debug(&self) {
-        dbg!(&self.particles.first());
+        dbg!(&self.particle_grid);
         // dbg!(&self.x_velocity);
     }
 }
@@ -709,7 +711,6 @@ fn main() {
         .unwrap();
 
     let mut simulation = Simulation::new([60, 40]);
-    // simulation.y_velocity.0.insert([2, 2], 100.0);
     for x in 0..10 {
         for y in 0..10 {
             simulation.spawn(Particle {
@@ -722,12 +723,12 @@ fn main() {
         }
     }
     // simulation.spawn(Particle {
-    //     pos: [80.0, 780.0],
+    //     pos: [80.0, 100.0],
     //     velocity: [0.0, 100.0],
     // });
     // simulation.spawn(Particle {
-    //     pos: [80.0, 80.0],
-    //     velocity: [0.0, 100.0],
+    //     pos: [80.0, 00.0],
+    //     velocity: [0.0, 0.0],
     // });
     // simulation.spawn(Particle {
     //     pos: [130.0, 800.0],
@@ -738,16 +739,19 @@ fn main() {
     let mut prev_frame = SystemTime::now();
     let mut frame_idx = 0;
     let mut total_time = 0.0;
+    window.events.max_fps(60);
     while let Some(event) = window.next() {
         window.draw_2d(&event, |ctx, graphics_buffer, _device| {
             let dt = SystemTime::now()
                 .duration_since(prev_frame)
                 .expect("Time may have gone backwatds");
             total_time += dt.as_secs_f64();
+            prev_frame = SystemTime::now();
             simulation.simulate(dt.as_secs_f64());
             graphics_buffer.clear_color([1.0, 1.0, 1.0, 1.0]);
             simulation.render(ctx, graphics_buffer);
-            prev_frame = SystemTime::now();
+            frame_idx += 1;
+            // dbg!(dt);
         });
 
         if let Event::Input(
@@ -760,8 +764,6 @@ fn main() {
         {
             simulation.debug();
         }
-
-        frame_idx += 1;
     }
 
     println!("Average frame rate {}", frame_idx as f64 / total_time)
