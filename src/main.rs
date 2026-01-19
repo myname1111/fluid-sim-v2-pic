@@ -7,7 +7,7 @@ const BASE_PARTICLE_RADIUS: f64 = 10.0;
 const CELL_SIZE: f64 = BASE_PARTICLE_RADIUS * 2.0;
 const PARTICLE_COLOR: [f32; 4] = [0.0, 0.0, 1.0, 1.0];
 const GRAVITY: f64 = 9.8;
-const NUM_PARTICLE_ITERS: usize = 10;
+const NUM_PARTICLE_ITERS: usize = 2;
 const COLLISION_RANDOMNESS: f64 = 0.1;
 const DIVERGENCE_SOLVER_ITERS: usize = 20;
 const OVERRELAXATION: f64 = 1.9;
@@ -154,7 +154,33 @@ impl<T> Grid<T> {
 }
 
 #[derive(Default, Debug)]
-struct ParticleGrid(Grid<HashSet<usize>>);
+struct Cell(Vec<usize>);
+
+impl Cell {
+    fn remove(&mut self, key: usize) {
+        let mut found_idx = None;
+        for (idx, item) in self.0.iter().enumerate() {
+            if *item == key {
+                found_idx = Some(idx);
+            }
+        }
+        let Some(idx) = found_idx else {
+            return;
+        };
+        self.0.remove(idx);
+    }
+
+    fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    fn insert(&mut self, item: usize) {
+        self.0.push(item);
+    }
+}
+
+#[derive(Default, Debug)]
+struct ParticleGrid(Grid<Cell>);
 
 trait GridParticleInterface {
     const OFFSET: [f64; 2];
@@ -200,7 +226,7 @@ impl ParticleGrid {
         let mut remove_old = false;
 
         if let Some(old_cell) = self.0.get_mut_filled(old) {
-            old_cell.remove(&particle_idx);
+            old_cell.remove(particle_idx);
             remove_old = old_cell.is_empty();
         }
 
@@ -211,8 +237,7 @@ impl ParticleGrid {
         if let Some(new_cell) = self.0.get_mut_filled(new) {
             new_cell.insert(particle_idx);
         } else {
-            let mut new_set = HashSet::new();
-            new_set.insert(particle_idx);
+            let mut new_set = Cell(vec![particle_idx]);
             self.0.insert(new, new_set);
         }
 
@@ -445,34 +470,34 @@ impl Simulation {
         if let Some(hashset) = self.particle_grid.0.get_mut_filled(grid_pos) {
             hashset.insert(new_index);
         } else {
-            let mut new_hashset = HashSet::new();
-            new_hashset.insert(new_index);
+            let new_hashset = Cell(vec![new_index]);
             self.particle_grid.0.insert(grid_pos, new_hashset);
         }
     }
 
     fn get_particle_collision(&self) -> HashSet<[usize; 2]> {
         let mut collisions = HashSet::new();
+        let other_pos = (-1i32..=1i32)
+            .flat_map(|x| (-1i32..=1i32).map(move |y| [x, y]))
+            .collect::<Vec<_>>();
 
         for (idx, particles) in self.particle_grid.0.0.iter().enumerate() {
             let Some(particles) = particles else {
                 continue;
             };
             let pos = self.particle_grid.0.pos(idx);
-            let other_pos = (-1i32..=1i32)
-                .flat_map(|x| (-1i32..=1i32).map(move |y| [x, y]))
+            let other_particles = other_pos
+                .iter()
                 .map(|delta_pos| {
                     [
                         (pos[0] as i32 + delta_pos[0]) as u32,
                         (pos[1] as i32 + delta_pos[1]) as u32,
                     ]
-                });
-            let other_particles = other_pos
+                })
                 .filter_map(|neighbour_pos| self.particle_grid.0.get(neighbour_pos))
-                .flatten()
-                .chain(particles.iter());
+                .flat_map(|cell| &cell.0);
 
-            for particle_idx in particles {
+            for particle_idx in &particles.0 {
                 for other_particle_idx in other_particles.clone() {
                     if particle_idx == other_particle_idx {
                         continue;
@@ -483,10 +508,6 @@ impl Simulation {
                     } else {
                         [*particle_idx, *other_particle_idx]
                     };
-
-                    if collisions.contains(&key) {
-                        continue;
-                    }
 
                     let particle = self.particles[*particle_idx];
                     let other_particle = self.particles[*other_particle_idx];
@@ -803,7 +824,7 @@ fn main() {
                 .expect("Time may have gone backwatds");
             total_time += dt.as_secs_f64();
             prev_frame = SystemTime::now();
-            simulation.simulate(dt.as_secs_f64());
+            // simulation.simulate(dt.as_secs_f64());
             graphics_buffer.clear_color([1.0, 1.0, 1.0, 1.0]);
             simulation.render(ctx, graphics_buffer);
             frame_idx += 1;
