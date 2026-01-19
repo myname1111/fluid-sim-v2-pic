@@ -12,6 +12,8 @@ const COLLISION_RANDOMNESS: f64 = 0.1;
 const DIVERGENCE_SOLVER_ITERS: usize = 20;
 const OVERRELAXATION: f64 = 1.9;
 const MIN: f64 = 0.04;
+const REST_DENSITY: f64 = 1.0;
+const STIFFNESS: f64 = 1.0;
 
 trait ProblematicallySmall {
     fn is_problematically_small(&self) -> bool;
@@ -658,7 +660,14 @@ impl Simulation {
                     .copied()
                     .unwrap_or(0.0)
                     * mask[3];
-            let divergence = divergence * OVERRELAXATION;
+            let density = self
+                .particle_density_grid
+                .0
+                .get(pos)
+                .copied()
+                .unwrap_or(REST_DENSITY);
+            // dbg!(density);
+            let divergence = divergence * OVERRELAXATION + STIFFNESS * (density - REST_DENSITY);
             let total = mask.iter().sum::<f64>();
             if total.is_problematically_small() {
                 continue;
