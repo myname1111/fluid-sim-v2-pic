@@ -55,8 +55,8 @@ fn main() {
             // simulation.simulate(dt.as_secs_f64());
             graphics_buffer.clear_color([1.0, 1.0, 1.0, 1.0]);
 
-            let mut simulation_renderer = SimulationRenderer::new(&ctx, graphics_buffer);
-            simulation_renderer.render(&simulation);
+            // let mut simulation_renderer = SimulationRenderer::new(&ctx, graphics_buffer);
+            // simulation_renderer.render(&simulation);
             frame_idx += 1;
             // dbg!(dt);
         });
