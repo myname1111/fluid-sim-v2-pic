@@ -1,27 +1,71 @@
 mod renderer;
 mod simulation;
 
-use std::time::SystemTime;
+use std::{
+    sync::Arc,
+    time::{Duration, SystemTime},
+};
 
 use simulation::{Particle, Simulation};
-use winit::{application::ApplicationHandler, event_loop::EventLoop};
+use winit::{
+    application::ApplicationHandler,
+    event::{KeyEvent, WindowEvent},
+    event_loop::EventLoop,
+    keyboard::{KeyCode, PhysicalKey},
+    window::Window,
+};
 
 use crate::{renderer::SimulationRenderer, simulation::BASE_PARTICLE_RADIUS};
 
-struct App;
+struct App {
+    renderer: Option<SimulationRenderer>,
+    simulation: Simulation,
+    prev_time: SystemTime,
+}
 
 impl ApplicationHandler<()> for App {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
-        todo!()
+        let window_attributes = Window::default_attributes();
+
+        let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
+        self.renderer = Some(pollster::block_on(SimulationRenderer::new(window)).unwrap());
     }
 
     fn window_event(
         &mut self,
         event_loop: &winit::event_loop::ActiveEventLoop,
-        window_id: winit::window::WindowId,
-        event: winit::event::WindowEvent,
+        _window_id: winit::window::WindowId,
+        event: WindowEvent,
     ) {
-        todo!()
+        let Some(renderer) = &mut self.renderer else {
+            return;
+        };
+
+        match event {
+            WindowEvent::CloseRequested => event_loop.exit(),
+            WindowEvent::Resized(size) => renderer.resize(size.width, size.height),
+            WindowEvent::RedrawRequested => {
+                let dt = SystemTime::now().duration_since(self.prev_time).unwrap();
+                self.prev_time = SystemTime::now();
+                // dbg!(dt);
+
+                self.simulation.simulate(dt.as_secs_f64());
+                renderer.render(&self.simulation)
+            }
+            WindowEvent::KeyboardInput {
+                event:
+                    KeyEvent {
+                        physical_key: PhysicalKey::Code(code),
+                        state: key_state,
+                        ..
+                    },
+                ..
+            } => match (code, key_state.is_pressed()) {
+                (KeyCode::Escape, true) => event_loop.exit(),
+                _ => {}
+            },
+            _ => {}
+        }
     }
 }
 
@@ -53,6 +97,13 @@ fn main() -> anyhow::Result<()> {
     // });
 
     let event_loop = EventLoop::with_user_event().build()?;
+    let mut app = App {
+        renderer: None,
+        simulation,
+        prev_time: SystemTime::now(),
+    };
+
+    event_loop.run_app(&mut app)?;
 
     Ok(())
 }
