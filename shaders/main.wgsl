@@ -18,5 +18,9 @@ fn vs_main(
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    return vec4<f32>(0.3, 0.2, 0.1, 1.0);
+    if length(in.clip_position.xy) < 400.0 {
+        return vec4<f32>(0.3, 0.2, 0.1, 1.0);
+    } else {
+        return vec4<f32>(0.0);
+    }
 }
