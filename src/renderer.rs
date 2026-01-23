@@ -73,9 +73,18 @@ impl SimulationRenderer {
         })
     }
 
-    pub fn render(&mut self, simulation: &Simulation) {
+    pub fn render(&mut self, _simulation: &Simulation) {
         self.window.request_redraw();
     }
 
-    pub fn resize(&mut self, _width: u32, _height: u32) {}
+    pub fn resize(&mut self, width: u32, height: u32) {
+        if width == 0 || height == 0 {
+            return;
+        }
+
+        self.config.width = width;
+        self.config.height = height;
+        self.surface.configure(&self.device, &self.config);
+        self.is_surface_configured = true
+    }
 }
