@@ -50,7 +50,13 @@ impl ApplicationHandler<()> for App {
                 // dbg!(dt);
 
                 self.simulation.simulate(dt.as_secs_f64());
-                renderer.render(&self.simulation)
+                match renderer.render(&self.simulation) {
+                    Ok(_) => (),
+                    Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
+                        renderer.recreate_window()
+                    }
+                    Err(e) => log::error!("Error detected! {e}"),
+                }
             }
             WindowEvent::KeyboardInput {
                 event:

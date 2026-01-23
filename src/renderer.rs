@@ -73,8 +73,49 @@ impl SimulationRenderer {
         })
     }
 
-    pub fn render(&mut self, _simulation: &Simulation) {
+    pub fn render(&mut self, _simulation: &Simulation) -> Result<(), wgpu::SurfaceError> {
         self.window.request_redraw();
+
+        if !self.is_surface_configured {
+            return Ok(());
+        }
+
+        let output = self.surface.get_current_texture()?;
+        let view = output
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Command Encoder"),
+            });
+
+        let render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("Render Pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &view,
+                resolve_target: None,
+                depth_slice: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color {
+                        r: 1.0,
+                        g: 1.0,
+                        b: 1.0,
+                        a: 1.0,
+                    }),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            occlusion_query_set: None,
+            timestamp_writes: None,
+        });
+
+        drop(render_pass);
+        self.queue.submit(std::iter::once(encoder.finish()));
+        output.present();
+
+        Ok(())
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {
@@ -92,5 +133,10 @@ impl SimulationRenderer {
         if let (KeyCode::Escape, true) = (code, is_pressed) {
             event_loop.exit()
         }
+    }
+
+    pub fn recreate_window(&mut self) {
+        let size = self.window.inner_size();
+        self.resize(size.width, size.height);
     }
 }
