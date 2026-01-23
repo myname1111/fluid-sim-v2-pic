@@ -11,7 +11,7 @@ use winit::{
     application::ApplicationHandler,
     event::{KeyEvent, WindowEvent},
     event_loop::EventLoop,
-    keyboard::{KeyCode, PhysicalKey},
+    keyboard::PhysicalKey,
     window::Window,
 };
 
