@@ -60,10 +60,7 @@ impl ApplicationHandler<()> for App {
                         ..
                     },
                 ..
-            } => match (code, key_state.is_pressed()) {
-                (KeyCode::Escape, true) => event_loop.exit(),
-                _ => {}
-            },
+            } => renderer.handle_key(event_loop, code, key_state.is_pressed()),
             _ => {}
         }
     }

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use winit::window::Window;
+use winit::{event_loop::ActiveEventLoop, keyboard::KeyCode, window::Window};
 
 use crate::simulation::Simulation;
 
@@ -86,5 +86,11 @@ impl SimulationRenderer {
         self.config.height = height;
         self.surface.configure(&self.device, &self.config);
         self.is_surface_configured = true
+    }
+
+    pub fn handle_key(&mut self, event_loop: &ActiveEventLoop, code: KeyCode, is_pressed: bool) {
+        if let (KeyCode::Escape, true) = (code, is_pressed) {
+            event_loop.exit()
+        }
     }
 }
