@@ -22,16 +22,16 @@ impl Vertex {
 
 const VERTICES: &[Vertex] = &[
     Vertex {
-        position: [200.0, 200.0],
+        position: [50.0, 50.0],
     },
     Vertex {
-        position: [100.0, 200.0],
+        position: [-50.0, 50.0],
     },
     Vertex {
-        position: [200.0, 100.0],
+        position: [50.0, -50.0],
     },
     Vertex {
-        position: [100.0, 100.0],
+        position: [-50.0, -50.0],
     },
 ];
 
@@ -43,6 +43,25 @@ struct ScreenUniform {
     width: f32,
     height: f32,
 }
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Pod, Zeroable)]
+struct ParticleInstance {
+    pos: [f32; 2],
+}
+
+impl ParticleInstance {
+    const DESC: wgpu::VertexBufferLayout<'static> = wgpu::VertexBufferLayout {
+        array_stride: std::mem::size_of::<ParticleInstance>() as wgpu::BufferAddress,
+        step_mode: wgpu::VertexStepMode::Instance,
+        attributes: &wgpu::vertex_attr_array![1 => Float32x2],
+    };
+}
+
+// TODO: Temporary, change with particles later
+const INSTANCES: &[ParticleInstance] = &[ParticleInstance {
+    pos: [100.0, 100.0],
+}];
 
 pub struct SimulationRenderer {
     window: Arc<Window>,
@@ -57,6 +76,7 @@ pub struct SimulationRenderer {
     num_indices: u32,
     screen_uniform_buffer: wgpu::Buffer,
     screen_uniform_bind_group: wgpu::BindGroup,
+    instance_buffer: wgpu::Buffer,
 }
 
 impl SimulationRenderer {
@@ -160,6 +180,12 @@ impl SimulationRenderer {
             }],
         });
 
+        let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Particle Instance Buffer"),
+            contents: bytemuck::cast_slice(INSTANCES),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Pipeline Layout"),
@@ -174,7 +200,7 @@ impl SimulationRenderer {
                 module: &shader,
                 entry_point: Some("vs_main"),
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
-                buffers: &[Vertex::DESC],
+                buffers: &[Vertex::DESC, ParticleInstance::DESC],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
@@ -218,6 +244,7 @@ impl SimulationRenderer {
             num_indices,
             screen_uniform_buffer,
             screen_uniform_bind_group,
+            instance_buffer,
         })
     }
 
@@ -270,6 +297,7 @@ impl SimulationRenderer {
         render_pass.set_bind_group(0, &self.screen_uniform_bind_group, &[]);
         render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+        render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
         render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
 
         drop(render_pass);
