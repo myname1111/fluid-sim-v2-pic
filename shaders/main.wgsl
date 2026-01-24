@@ -10,6 +10,7 @@ struct VertexInput {
 
 struct instanceInput {
     @location(1) position: vec2<f32>,
+    @location(2) radius: f32
 }
 
 struct VertexOutput {
@@ -24,7 +25,7 @@ fn vs_main(
     instance: instanceInput
 ) -> VertexOutput {
     var out: VertexOutput;
-    let world_position = model.position + instance.position;
+    let world_position = model.position * instance.radius + instance.position;
     let pos = world_position / screen_uniform.size * 2.0 - 1.0;
     out.clip_position = vec4<f32>(pos.x, -pos.y, 0.0, 1.0);
     out.rel_pos = model.position;
@@ -33,7 +34,7 @@ fn vs_main(
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    if length(in.rel_pos) < 50.0 {
+    if length(in.rel_pos) < 1.0 {
         return vec4<f32>(0.0, 0.0, 1.0, 1.0);
     } else {
         return vec4<f32>(0.0);

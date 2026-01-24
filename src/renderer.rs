@@ -22,16 +22,16 @@ impl Vertex {
 
 const VERTICES: &[Vertex] = &[
     Vertex {
-        position: [50.0, 50.0],
+        position: [1.0, 1.0],
     },
     Vertex {
-        position: [-50.0, 50.0],
+        position: [-1.0, 1.0],
     },
     Vertex {
-        position: [50.0, -50.0],
+        position: [1.0, -1.0],
     },
     Vertex {
-        position: [-50.0, -50.0],
+        position: [-1.0, -1.0],
     },
 ];
 
@@ -48,19 +48,21 @@ struct ScreenUniform {
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
 struct ParticleInstance {
     pos: [f32; 2],
+    radius: f32,
 }
 
 impl ParticleInstance {
     const DESC: wgpu::VertexBufferLayout<'static> = wgpu::VertexBufferLayout {
         array_stride: std::mem::size_of::<ParticleInstance>() as wgpu::BufferAddress,
         step_mode: wgpu::VertexStepMode::Instance,
-        attributes: &wgpu::vertex_attr_array![1 => Float32x2],
+        attributes: &wgpu::vertex_attr_array![1 => Float32x2, 2 => Float32],
     };
 }
 
 // TODO: Temporary, change with particles later
 const INSTANCES: &[ParticleInstance] = &[ParticleInstance {
     pos: [100.0, 100.0],
+    radius: 10.0,
 }];
 
 pub struct SimulationRenderer {
