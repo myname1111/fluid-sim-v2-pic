@@ -22,20 +22,27 @@ impl Vertex {
 
 const VERTICES: &[Vertex] = &[
     Vertex {
-        position: [0.5, 0.5],
+        position: [200.0, 200.0],
     },
     Vertex {
-        position: [-0.5, 0.5],
+        position: [100.0, 200.0],
     },
     Vertex {
-        position: [0.5, -0.5],
+        position: [200.0, 100.0],
     },
     Vertex {
-        position: [-0.5, -0.5],
+        position: [100.0, 100.0],
     },
 ];
 
-const INDICES: &[u16] = &[0, 1, 2, 1, 3, 2];
+const INDICES: &[u16] = &[2, 1, 0, 2, 3, 1];
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Pod, Zeroable)]
+struct ScreenUniform {
+    width: f32,
+    height: f32,
+}
 
 pub struct SimulationRenderer {
     window: Arc<Window>,
@@ -48,6 +55,8 @@ pub struct SimulationRenderer {
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
     num_indices: u32,
+    screen_uniform_buffer: wgpu::Buffer,
+    screen_uniform_bind_group: wgpu::BindGroup,
 }
 
 impl SimulationRenderer {
@@ -103,10 +112,58 @@ impl SimulationRenderer {
         };
 
         let shader = device.create_shader_module(wgpu::include_wgsl!("../shaders/main.wgsl"));
+
+        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Vertex Buffer"),
+            contents: bytemuck::cast_slice(VERTICES),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+
+        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Index Buffer"),
+            contents: bytemuck::cast_slice(INDICES),
+            usage: wgpu::BufferUsages::INDEX,
+        });
+
+        let screen_uniform = ScreenUniform {
+            width: config.width as f32,
+            height: config.height as f32,
+        };
+
+        let screen_uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Screen Uniform Buffer"),
+            contents: bytemuck::cast_slice(&[screen_uniform]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let screen_uniform_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("Screen Uniform Bind Group Layout"),
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+            });
+
+        let screen_uniform_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Screen Uniform Bind Group"),
+            layout: &screen_uniform_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: screen_uniform_buffer.as_entire_binding(),
+            }],
+        });
+
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Pipeline Layout"),
-                bind_group_layouts: &[],
+                bind_group_layouts: &[&screen_uniform_bind_group_layout],
                 push_constant_ranges: &[],
             });
 
@@ -125,7 +182,7 @@ impl SimulationRenderer {
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: config.format,
-                    blend: Some(wgpu::BlendState::REPLACE),
+                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
             }),
@@ -148,18 +205,6 @@ impl SimulationRenderer {
             cache: None,
         });
 
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(VERTICES),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-
-        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Index Buffer"),
-            contents: bytemuck::cast_slice(INDICES),
-            usage: wgpu::BufferUsages::INDEX,
-        });
-
         Ok(Self {
             surface,
             device,
@@ -171,7 +216,16 @@ impl SimulationRenderer {
             vertex_buffer,
             index_buffer,
             num_indices,
+            screen_uniform_buffer,
+            screen_uniform_bind_group,
         })
+    }
+
+    fn screen_uniform(&self) -> ScreenUniform {
+        ScreenUniform {
+            width: self.config.width as f32,
+            height: self.config.height as f32,
+        }
     }
 
     pub fn render(&mut self, _simulation: &Simulation) -> Result<(), wgpu::SurfaceError> {
@@ -213,6 +267,7 @@ impl SimulationRenderer {
         });
 
         render_pass.set_pipeline(&self.render_pipeline);
+        render_pass.set_bind_group(0, &self.screen_uniform_bind_group, &[]);
         render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
@@ -232,7 +287,13 @@ impl SimulationRenderer {
         self.config.width = width;
         self.config.height = height;
         self.surface.configure(&self.device, &self.config);
-        self.is_surface_configured = true
+        self.is_surface_configured = true;
+
+        self.queue.write_buffer(
+            &self.screen_uniform_buffer,
+            0,
+            bytemuck::cast_slice(&[self.screen_uniform()]),
+        );
     }
 
     pub fn handle_key(&mut self, event_loop: &ActiveEventLoop, code: KeyCode, is_pressed: bool) {
