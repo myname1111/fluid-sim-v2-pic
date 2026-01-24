@@ -4,7 +4,7 @@ use bytemuck::{Pod, Zeroable};
 use wgpu::util::DeviceExt;
 use winit::{event_loop::ActiveEventLoop, keyboard::KeyCode, window::Window};
 
-use crate::simulation::Simulation;
+use crate::simulation::{self, BASE_PARTICLE_RADIUS, Simulation};
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
@@ -59,12 +59,6 @@ impl ParticleInstance {
     };
 }
 
-// TODO: Temporary, change with particles later
-const INSTANCES: &[ParticleInstance] = &[ParticleInstance {
-    pos: [100.0, 100.0],
-    radius: 10.0,
-}];
-
 pub struct SimulationRenderer {
     window: Arc<Window>,
     surface: wgpu::Surface<'static>,
@@ -79,10 +73,11 @@ pub struct SimulationRenderer {
     screen_uniform_buffer: wgpu::Buffer,
     screen_uniform_bind_group: wgpu::BindGroup,
     instance_buffer: wgpu::Buffer,
+    max_particles: u32,
 }
 
 impl SimulationRenderer {
-    pub async fn new(window: Arc<Window>) -> anyhow::Result<Self> {
+    pub async fn new(window: Arc<Window>, max_particles: u32) -> anyhow::Result<Self> {
         let num_indices = INDICES.len() as u32;
 
         let size = window.inner_size();
@@ -182,10 +177,13 @@ impl SimulationRenderer {
             }],
         });
 
+        let instance_buffer_contents =
+            vec![0; max_particles as usize * std::mem::size_of::<ParticleInstance>()];
+
         let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Particle Instance Buffer"),
-            contents: bytemuck::cast_slice(INSTANCES),
-            usage: wgpu::BufferUsages::VERTEX,
+            contents: &instance_buffer_contents,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         });
 
         let render_pipeline_layout =
@@ -247,6 +245,7 @@ impl SimulationRenderer {
             screen_uniform_buffer,
             screen_uniform_bind_group,
             instance_buffer,
+            max_particles,
         })
     }
 
@@ -257,12 +256,35 @@ impl SimulationRenderer {
         }
     }
 
-    pub fn render(&mut self, _simulation: &Simulation) -> Result<(), wgpu::SurfaceError> {
+    fn particle_to_instance(particle: &simulation::Particle) -> ParticleInstance {
+        ParticleInstance {
+            pos: [particle.pos[0] as f32, particle.pos[1] as f32],
+            radius: BASE_PARTICLE_RADIUS as f32,
+        }
+    }
+
+    fn update_from_simulation(&mut self, simulation: &Simulation) {
+        self.queue.write_buffer(
+            &self.instance_buffer,
+            0,
+            bytemuck::cast_slice(
+                &simulation
+                    .particles()
+                    .iter()
+                    .map(Self::particle_to_instance)
+                    .collect::<Vec<_>>(),
+            ),
+        );
+    }
+
+    pub fn render(&mut self, simulation: &Simulation) -> Result<(), wgpu::SurfaceError> {
         self.window.request_redraw();
 
         if !self.is_surface_configured {
             return Ok(());
         }
+
+        self.update_from_simulation(simulation);
 
         let output = self.surface.get_current_texture()?;
         let view = output
@@ -300,7 +322,7 @@ impl SimulationRenderer {
         render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
-        render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
+        render_pass.draw_indexed(0..self.num_indices, 0, 0..self.max_particles);
 
         drop(render_pass);
         self.queue.submit(std::iter::once(encoder.finish()));

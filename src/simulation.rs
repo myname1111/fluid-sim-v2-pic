@@ -178,7 +178,7 @@ impl Cell {
 #[derive(Default, Debug)]
 pub struct ParticleGrid(pub Grid<Cell>);
 
-trait GridParticleInterface {
+pub trait GridParticleInterface {
     const OFFSET: [f64; 2];
 
     fn get_grid_pos_continuous(particle_pos: [f64; 2]) -> [f64; 2] {

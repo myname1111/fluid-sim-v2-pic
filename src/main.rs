@@ -21,6 +21,8 @@ struct App {
     renderer: Option<SimulationRenderer>,
     simulation: Simulation,
     prev_time: SystemTime,
+    max_particles: u32,
+    total_frames: u32,
 }
 
 impl ApplicationHandler<()> for App {
@@ -28,7 +30,8 @@ impl ApplicationHandler<()> for App {
         let window_attributes = Window::default_attributes();
 
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
-        self.renderer = Some(pollster::block_on(SimulationRenderer::new(window)).unwrap());
+        self.renderer =
+            Some(pollster::block_on(SimulationRenderer::new(window, self.max_particles)).unwrap());
     }
 
     fn window_event(
@@ -47,7 +50,8 @@ impl ApplicationHandler<()> for App {
             WindowEvent::RedrawRequested => {
                 let dt = SystemTime::now().duration_since(self.prev_time).unwrap();
                 self.prev_time = SystemTime::now();
-                // dbg!(dt);
+
+                self.total_frames += 1;
 
                 self.simulation.simulate(dt.as_secs_f64());
                 match renderer.render(&self.simulation) {
@@ -100,13 +104,23 @@ fn main() -> anyhow::Result<()> {
     // });
 
     let event_loop = EventLoop::with_user_event().build()?;
+    let start_time = SystemTime::now();
     let mut app = App {
         renderer: None,
         simulation,
-        prev_time: SystemTime::now(),
+        prev_time: start_time,
+        max_particles: 100,
+        total_frames: 0,
     };
 
     event_loop.run_app(&mut app)?;
+
+    let total_time = SystemTime::now().duration_since(start_time)?;
+
+    println!(
+        "Average FPS: {}",
+        app.total_frames as f64 / total_time.as_secs_f64(),
+    );
 
     Ok(())
 }
