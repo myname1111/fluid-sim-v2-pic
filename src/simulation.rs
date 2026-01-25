@@ -9,7 +9,7 @@ pub const DIVERGENCE_SOLVER_ITERS: usize = 20;
 pub const OVERRELAXATION: f64 = 1.9;
 pub const MIN: f64 = 0.04;
 pub const REST_DENSITY: f64 = 1.0;
-pub const STIFFNESS: f64 = 1.0;
+pub const STIFFNESS: f64 = 10.0;
 
 trait ProblematicallySmall {
     fn is_problematically_small(&self) -> bool;
@@ -63,16 +63,24 @@ pub struct Particle {
 
 impl Particle {
     fn push_out_of_border(&mut self, size: [f64; 2]) {
-        if self.pos[0] > size[0] || self.pos[0] <= 0.0 {
-            self.velocity[0] = 0.0
+        if self.pos[0] > size[0] {
+            self.velocity[0] = self.velocity[0].min(0.0);
         }
 
-        if self.pos[1] > size[1] || self.pos[1] <= 0.0 {
-            self.velocity[1] = 0.0
+        if self.pos[0] <= 0.0 {
+            self.velocity[0] = self.velocity[0].max(0.0);
         }
 
-        self.pos[0] = self.pos[0].clamp(0.0, size[0] - 0.01);
-        self.pos[1] = self.pos[1].clamp(0.0, size[1] - 0.01);
+        if self.pos[1] > size[1] {
+            self.velocity[1] = self.velocity[1].min(0.0);
+        }
+
+        if self.pos[1] <= 0.0 {
+            self.velocity[1] = self.velocity[1].max(0.0);
+        }
+
+        self.pos[0] = self.pos[0].clamp(0.01, size[0] - 0.01);
+        self.pos[1] = self.pos[1].clamp(0.01, size[1] - 0.01);
     }
 
     fn simulate(&mut self, dt: f64) {
@@ -233,7 +241,7 @@ impl ParticleGrid {
         if let Some(new_cell) = self.0.get_mut_filled(new) {
             new_cell.insert(particle_idx);
         } else {
-            let mut new_set = Cell(vec![particle_idx]);
+            let new_set = Cell(vec![particle_idx]);
             self.0.insert(new, new_set);
         }
 
@@ -290,6 +298,7 @@ where
         particle_grid: &ParticleGrid,
     ) {
         let grid_pos = Self::get_grid_pos(pos);
+        // dbg!(grid_pos, pos);
         let neighbours = [
             [grid_pos[0], grid_pos[1]],
             [grid_pos[0] + 1, grid_pos[1]],
@@ -298,6 +307,7 @@ where
         ]
         .into_iter()
         .filter(|neighbour_pos| Self::is_position_defined(neighbour_pos, particle_grid));
+        // dbg!(neighbours.clone().collect::<Vec<_>>());
         let weights = Self::get_weights(pos);
         for (neighbour, weight) in neighbours.zip(weights.iter()) {
             let Some(vel) = self.0.modify_or_insert(neighbour, 0.0) else {
@@ -362,16 +372,20 @@ where
 
     fn is_position_defined(vel_pos: &[u32; 2], particle_grid: &ParticleGrid) -> bool {
         let Some(positions_to_check_for) = Self::defined_positions(vel_pos) else {
-            return false;
+            return !particle_grid
+                .0
+                .get(*vel_pos)
+                .map(Cell::is_empty)
+                .unwrap_or(false);
         };
-        let mut out = true;
+        let mut out = false;
         for pos in positions_to_check_for {
             let is_air = particle_grid
                 .0
                 .get(pos)
                 .map(|cell| cell.is_empty())
                 .unwrap_or(false);
-            out &= !is_air
+            out |= !is_air
         }
         out
     }
@@ -426,7 +440,7 @@ impl ParticleDensityGrid {
         ];
         let weights = Self::get_weights(pos);
         for (neighbour, weight) in neighbours.iter().zip(weights) {
-            let Some(density) = self.0.modify_or_insert(grid_pos, 0.0) else {
+            let Some(density) = self.0.modify_or_insert(*neighbour, 0.0) else {
                 continue;
             };
             *density += weight;
@@ -451,10 +465,10 @@ impl Simulation {
     pub fn new(size: [u32; 2]) -> Simulation {
         Simulation {
             particles: vec![],
-            x_velocity: VelocityGrid::<X>::new([size[0] + 1, size[1]]),
-            y_velocity: VelocityGrid::<Y>::new([size[0], size[1] + 1]),
+            x_velocity: VelocityGrid::<X>::new([size[0] + 1, size[1] + 1]),
+            y_velocity: VelocityGrid::<Y>::new([size[0] + 1, size[1] + 1]),
             particle_grid: ParticleGrid::new(size),
-            particle_density_grid: ParticleDensityGrid::new(size),
+            particle_density_grid: ParticleDensityGrid::new([size[0] + 1, size[1] + 1]),
             size,
         }
     }
@@ -647,35 +661,35 @@ impl Simulation {
                 .map(|is_wall| if *is_wall { 0.0 } else { 1.0 })
                 .collect::<Vec<_>>();
             let neighbour_pos = neighbour_pos.collect::<Vec<_>>();
-            // dbg!(self.y_velocity.0.0.get(&[2, 2]));
+            // dbg!(self.y_velocity.0.index([5, 0]));
 
-            let divergence = self
+            let divergence = -self
                 .x_velocity
                 .0
                 .get(neighbour_pos[0])
                 .copied()
-                .unwrap_or(0.0)
+                .expect(&format!("{:?}", pos))
                 * mask[0]
-                + self
+                - self
                     .y_velocity
                     .0
                     .get(neighbour_pos[1])
                     .copied()
-                    .unwrap_or(0.0)
+                    .expect(&format!("{:?}", pos))
                     * mask[1]
-                - self
+                + self
                     .x_velocity
                     .0
                     .get(neighbour_pos[2])
                     .copied()
-                    .unwrap_or(0.0)
+                    .expect(&format!("{:?}", pos))
                     * mask[2]
-                - self
+                + self
                     .y_velocity
                     .0
                     .get(neighbour_pos[3])
                     .copied()
-                    .unwrap_or(0.0)
+                    .expect(&format!("{:?}", pos))
                     * mask[3];
             let density = self
                 .particle_density_grid
@@ -684,7 +698,7 @@ impl Simulation {
                 .copied()
                 .unwrap_or(REST_DENSITY);
             // dbg!(density);
-            let divergence = divergence * OVERRELAXATION + STIFFNESS * (density - REST_DENSITY);
+            let divergence = divergence * OVERRELAXATION - STIFFNESS * (density - REST_DENSITY);
             let total = mask.iter().sum::<f64>();
             if total.is_problematically_small() {
                 continue;
@@ -702,11 +716,11 @@ impl Simulation {
                 } else {
                     &mut self.y_velocity.0
                 };
-                let sign = ((idx as i32 / 2) * 2 - 1) as f64;
+                let sign = (1 - (idx as i32 / 2) * 2) as f64;
                 let Some(vel) = vel_grid.modify_or_insert(*pos, 0.0) else {
                     continue;
                 };
-                *vel += sign * divergence / total
+                *vel += sign * divergence * mask[idx] / total
             }
         }
     }
