@@ -1,21 +1,22 @@
 use std::{collections::HashSet, marker::PhantomData};
 
-pub const BASE_PARTICLE_RADIUS: f64 = 10.0;
+pub const BASE_PARTICLE_RADIUS: f64 = 2.0;
 pub const CELL_SIZE: f64 = BASE_PARTICLE_RADIUS * 2.0;
 pub const GRAVITY: f64 = 9.8;
 pub const NUM_PARTICLE_ITERS: usize = 2;
 pub const COLLISION_RANDOMNESS: f64 = 0.1;
-pub const DIVERGENCE_SOLVER_ITERS: usize = 20;
+pub const DIVERGENCE_SOLVER_ITERS: usize = 50;
 pub const OVERRELAXATION: f64 = 1.9;
 pub const MIN: f64 = 0.04;
 pub const REST_DENSITY: f64 = 1.0;
-pub const STIFFNESS: f64 = 10.0;
+pub const STIFFNESS: f64 = 30.0;
 
-const NEIGHBOUR_KERNEL: [[i32; 2]; 8] = [
+const NEIGHBOUR_KERNEL: [[i32; 2]; 9] = [
     [-1, -1],
     [-1, 0],
     [-1, 1],
     [0, -1],
+    [0, 0],
     [0, 1],
     [1, -1],
     [1, 0],
@@ -699,7 +700,8 @@ impl Simulation {
                 .copied()
                 .unwrap_or(REST_DENSITY);
             // dbg!(density);
-            let divergence = divergence * OVERRELAXATION - STIFFNESS * (density - REST_DENSITY);
+            let divergence =
+                divergence * OVERRELAXATION - STIFFNESS * (density - REST_DENSITY).max(0.0);
             let total = mask.iter().sum::<f64>();
             if total.is_problematically_small() {
                 continue;

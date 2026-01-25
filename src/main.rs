@@ -78,9 +78,9 @@ impl ApplicationHandler<()> for App {
 
 fn main() -> anyhow::Result<()> {
     env_logger::init();
-    let mut simulation = Simulation::new([60, 40]);
-    for x in 0..30 {
-        for y in 0..30 {
+    let mut simulation = Simulation::new([300, 200]);
+    for x in 0..160 {
+        for y in 0..160 {
             simulation.spawn(Particle {
                 pos: [
                     100.0 + x as f64 * BASE_PARTICLE_RADIUS * 2.0,
@@ -109,7 +109,7 @@ fn main() -> anyhow::Result<()> {
         renderer: None,
         simulation,
         prev_time: start_time,
-        max_particles: 900,
+        max_particles: 160 * 160,
         total_frames: 0,
     };
 
