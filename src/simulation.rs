@@ -11,6 +11,17 @@ pub const MIN: f64 = 0.04;
 pub const REST_DENSITY: f64 = 1.0;
 pub const STIFFNESS: f64 = 10.0;
 
+const NEIGHBOUR_KERNEL: [[i32; 2]; 8] = [
+    [-1, -1],
+    [-1, 0],
+    [-1, 1],
+    [0, -1],
+    [0, 1],
+    [1, -1],
+    [1, 0],
+    [1, 1],
+];
+
 trait ProblematicallySmall {
     fn is_problematically_small(&self) -> bool;
 }
@@ -487,16 +498,13 @@ impl Simulation {
 
     fn get_particle_collision(&self) -> HashSet<[usize; 2]> {
         let mut collisions = HashSet::new();
-        let other_pos = (-1i32..=1i32)
-            .flat_map(|x| (-1i32..=1i32).map(move |y| [x, y]))
-            .collect::<Vec<_>>();
 
         for (idx, particles) in self.particle_grid.0.0.iter().enumerate() {
             let Some(particles) = particles else {
                 continue;
             };
             let pos = self.particle_grid.0.pos(idx);
-            let other_particles = other_pos
+            let other_particles = NEIGHBOUR_KERNEL
                 .iter()
                 .map(|delta_pos| {
                     [
@@ -646,21 +654,14 @@ impl Simulation {
                 continue;
             }
             let pos = self.particle_grid.0.pos(idx);
-            let neighbour_pos = [[0, 0], [0, 0], [1, 0], [0, 1]].iter().map(|delta| {
+            let neighbour_pos = [[0, 0], [0, 0], [1, 0], [0, 1]].map(|delta| {
                 [
                     (pos[0] as i32 + delta[0]) as u32,
                     (pos[1] as i32 + delta[1]) as u32,
                 ]
             });
-            let is_wall = neighbour_pos
-                .clone()
-                .map(|pos| ParticleGrid::is_wall(self.size, pos))
-                .collect::<Vec<_>>();
-            let mask = is_wall
-                .iter()
-                .map(|is_wall| if *is_wall { 0.0 } else { 1.0 })
-                .collect::<Vec<_>>();
-            let neighbour_pos = neighbour_pos.collect::<Vec<_>>();
+            let is_wall = neighbour_pos.map(|pos| ParticleGrid::is_wall(self.size, pos));
+            let mask = is_wall.map(|is_wall| if is_wall { 0.0 } else { 1.0 });
             // dbg!(self.y_velocity.0.index([5, 0]));
 
             let divergence = -self
