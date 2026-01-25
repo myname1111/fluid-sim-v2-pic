@@ -669,28 +669,28 @@ impl Simulation {
                 .0
                 .get(neighbour_pos[0])
                 .copied()
-                .expect(&format!("{:?}", pos))
+                .unwrap_or_else(|| panic!("{:?}", pos))
                 * mask[0]
                 - self
                     .y_velocity
                     .0
                     .get(neighbour_pos[1])
                     .copied()
-                    .expect(&format!("{:?}", pos))
+                    .unwrap_or_else(|| panic!("{:?}", pos))
                     * mask[1]
                 + self
                     .x_velocity
                     .0
                     .get(neighbour_pos[2])
                     .copied()
-                    .expect(&format!("{:?}", pos))
+                    .unwrap_or_else(|| panic!("{:?}", pos))
                     * mask[2]
                 + self
                     .y_velocity
                     .0
                     .get(neighbour_pos[3])
                     .copied()
-                    .expect(&format!("{:?}", pos))
+                    .unwrap_or_else(|| panic!("{:?}", pos))
                     * mask[3];
             let density = self
                 .particle_density_grid
