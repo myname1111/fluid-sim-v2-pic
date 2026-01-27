@@ -259,7 +259,7 @@ impl SimulationRenderer {
     fn particle_to_instance(particle: &simulation::Particle) -> ParticleInstance {
         ParticleInstance {
             pos: [particle.pos[0] as f32, particle.pos[1] as f32],
-            radius: BASE_PARTICLE_RADIUS as f32,
+            radius: (BASE_PARTICLE_RADIUS * 5.0) as f32,
         }
     }
 

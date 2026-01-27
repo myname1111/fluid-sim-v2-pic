@@ -35,7 +35,7 @@ fn vs_main(
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     if length(in.rel_pos) < 1.0 {
-        return vec4<f32>(0.0, 0.0, 1.0, 1.0);
+        return vec4<f32>(0.0, 0.0, 1.0, pow(1 - length(in.rel_pos), 2));
     } else {
         return vec4<f32>(0.0);
     }
