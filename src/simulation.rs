@@ -1,4 +1,4 @@
-use std::{collections::HashSet, marker::PhantomData};
+use std::marker::PhantomData;
 
 pub const BASE_PARTICLE_RADIUS: f64 = 2.0;
 pub const CELL_SIZE: f64 = BASE_PARTICLE_RADIUS * 2.0;
@@ -10,6 +10,7 @@ pub const OVERRELAXATION: f64 = 1.9;
 pub const MIN: f64 = 0.04;
 pub const REST_DENSITY: f64 = 1.0;
 pub const STIFFNESS: f64 = 30.0;
+pub const FLIP_INTERP_COEFF: f64 = 0.9;
 
 const NEIGHBOUR_KERNEL: [[i32; 2]; 9] = [
     [-1, -1],
@@ -101,7 +102,7 @@ impl Particle {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct Grid<T>(pub Vec<Option<T>>, pub [u32; 2]);
 
 impl<T> Grid<T> {
@@ -169,7 +170,7 @@ impl<T> Grid<T> {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct Cell(pub Vec<usize>);
 
 impl Cell {
@@ -289,7 +290,7 @@ impl PosDirection for Y {
     const INDEX: usize = 1;
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct VelocityGrid<P: PosDirection>(pub Grid<f64>, pub PhantomData<P>);
 
 impl<P: PosDirection> VelocityGrid<P> {
@@ -401,6 +402,20 @@ where
         }
         out
     }
+
+    fn as_residual(&mut self, old: &VelocityGrid<P>) {
+        for (idx, cell) in old.0.0.iter().enumerate() {
+            let Some(old_cell) = cell else {
+                continue;
+            };
+            let new_cell = self.0.0.get_mut(idx).unwrap();
+            if *old_cell == 0.0 {
+                continue;
+            }
+
+            *new_cell = Some(new_cell.unwrap_or(0.0) - *old_cell)
+        }
+    }
 }
 
 impl GridParticleInterface for VelocityGrid<X> {
@@ -411,7 +426,7 @@ impl GridParticleInterface for VelocityGrid<Y> {
     const OFFSET: [f64; 2] = [-0.5, 0.0];
 }
 
-trait DefinedPositionsRetrivable {
+pub trait DefinedPositionsRetrivable {
     fn defined_positions(vel_pos: &[u32; 2]) -> Option<[[u32; 2]; 2]>;
 }
 
@@ -497,8 +512,8 @@ impl Simulation {
         }
     }
 
-    fn get_particle_collision(&self) -> HashSet<[usize; 2]> {
-        let mut collisions = HashSet::new();
+    fn get_particle_collision(&self) -> Vec<[usize; 2]> {
+        let mut collisions = Vec::new();
 
         for (idx, particles) in self.particle_grid.0.0.iter().enumerate() {
             let Some(particles) = particles else {
@@ -533,7 +548,7 @@ impl Simulation {
 
                     let distance = particle.pos.distance(other_particle.pos);
                     if distance < 2.0 * BASE_PARTICLE_RADIUS {
-                        collisions.insert(key);
+                        collisions.push(key);
                     }
                 }
             }
@@ -728,10 +743,21 @@ impl Simulation {
         }
     }
 
-    fn grid_to_particle_velocity(&mut self) {
+    fn grid_to_particle_velocity(&mut self, old_x: VelocityGrid<X>, old_y: VelocityGrid<Y>) {
+        let mut res_x = self.x_velocity.clone();
+        res_x.as_residual(&old_x);
+        let mut res_y = self.y_velocity.clone();
+        res_y.as_residual(&old_y);
+
         for particle in &mut self.particles {
-            particle.velocity[0] = self.x_velocity.grid_to_particle(particle.pos);
-            particle.velocity[1] = self.y_velocity.grid_to_particle(particle.pos);
+            let pic_x = self.x_velocity.grid_to_particle(particle.pos);
+            let pic_y = self.y_velocity.grid_to_particle(particle.pos);
+
+            let flip_x = particle.velocity[0] + res_x.grid_to_particle(particle.pos);
+            let flip_y = particle.velocity[1] + res_y.grid_to_particle(particle.pos);
+
+            particle.velocity[0] = pic_x * (1.0 - FLIP_INTERP_COEFF) + flip_x * FLIP_INTERP_COEFF;
+            particle.velocity[1] = pic_y * (1.0 - FLIP_INTERP_COEFF) + flip_y * FLIP_INTERP_COEFF;
         }
     }
 
@@ -739,11 +765,13 @@ impl Simulation {
         self.simulate_particles(dt);
         self.update_particle_density();
         self.particle_to_grid_velocity();
+        let old_x = self.x_velocity.clone();
+        let old_y = self.y_velocity.clone();
         self.add_forces(dt);
         for _ in 0..DIVERGENCE_SOLVER_ITERS {
             self.make_incompressible();
         }
-        self.grid_to_particle_velocity();
+        self.grid_to_particle_velocity(old_x, old_y);
     }
 
     pub fn debug(&self) {
