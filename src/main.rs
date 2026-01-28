@@ -80,7 +80,7 @@ fn main() -> anyhow::Result<()> {
     env_logger::init();
     let mut simulation = Simulation::new([
         1920 / BASE_PARTICLE_RADIUS as u32 / 2,
-        920 / BASE_PARTICLE_RADIUS as u32 / 2,
+        1000 / BASE_PARTICLE_RADIUS as u32 / 2,
     ]);
     for x in 0..160 {
         for y in 0..160 {
